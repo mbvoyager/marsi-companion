@@ -82,6 +82,19 @@ To stop it persistently, remove the managed startup block as described in
 
 ## Pi: audio and Bluetooth
 
+Start with Marsi closed and run **on the Pi**, locally or through SSH:
+
+```bash
+cd ~/marsi-companion
+.venv-pi/bin/python -m marsi_local.audio --check
+```
+
+This uses `.env.pi`, tests a tone and five-second microphone replay, and shows
+route warnings. `--status` provides a silent readiness report. See
+[audio check and recovery](audio-check.md) for how to interpret each failure and
+restore Bluetooth profiles, routes and volume. Test local audio before opening
+the display or changing Ubuntu's speech recognizer.
+
 Run these as Marsi's Pi user:
 
 ```bash

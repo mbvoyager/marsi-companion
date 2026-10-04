@@ -92,6 +92,7 @@ conversation, then speech, then the little body.
 6. **[The Forgekeeper's Ledger — development and handoff](docs/development.md)**
 7. **[The Observance Calendar — appearance, routines and memory](docs/behaviour.md)**
 8. **[The Rite of Diagnosis — useful Ubuntu and Pi commands](docs/troubleshooting.md)**
+9. **[The Trial of the Vox — test sound before awakening](docs/audio-check.md)**
 
 To retrieve the archive after installing Git:
 

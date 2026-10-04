@@ -11,6 +11,10 @@ Bluetooth audio access is normally associated with the active local login.
 For setup over SSH, use the version-specific option in step 2 below. The GUI
 still starts from the Pi's physical console as described in the Pi setup guide.
 
+If audio worked before and stopped after reboot or reconnecting, start with
+[the local audio check](audio-check.md). It tests the exact settings Marsi uses
+without needing Qwen, Whisper or a graphical session.
+
 ## 1. Understand the receiver
 
 For a receiver connected to an old speaker system, the expected arrangement is:

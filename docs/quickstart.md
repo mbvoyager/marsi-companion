@@ -52,6 +52,17 @@ This display update needs no new Pi Python packages. Keep `.env.pi`, including
 your working microphone and speaker settings. New settings have defaults, so an
 existing settings file does not need replacing. Never copy an example over it.
 
+**Before opening the display, test the Pi's speaker and microphone:**
+
+```bash
+.venv-pi/bin/python -m marsi_local.audio --check
+```
+
+SSH works for this check. Follow its tone and five-second microphone replay
+prompts. Keep the Bluetooth receiver powered; if it fails, use
+[the audio check and recovery guide](audio-check.md) before proceeding.
+For a silent inspection only, use `--status` instead of `--check`.
+
 ## 3. Start the display manually
 
 On **the Pi's physical console** with Raspberry Pi OS Lite:
@@ -65,6 +76,10 @@ startx "$HOME/marsi-companion/deploy/marsi-xsession.sh" -- -nocursor
 This opens Marsi on the attached screen. A normal SSH shell cannot substitute
 for the physical console for this `startx` command. From an existing desktop's
 terminal, use `.venv-pi/bin/python -m marsi_local.pi` instead.
+
+Startup also runs a silent audio readiness check and displays any warnings. It
+does not play a tone or record a microphone sample; use the manual check above
+to verify actual sound. Typed conversation stays available if audio is missing.
 
 - Type a sentence and press Enter or SEND.
 - Press **F8** or TALK, speak, then press **F8** or FINISH. F8 works while the

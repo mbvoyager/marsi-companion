@@ -64,32 +64,7 @@ First verify the connection without a display:
 Type a message and receive a Qwen answer. If this fails, fix the address, token,
 server process, or firewall before troubleshooting audio. `/quit` exits.
 
-## 2. Open the display
-
-From the Pi's local console on Lite:
-
-```bash
-chmod +x deploy/marsi-xsession.sh
-startx "$HOME/marsi-companion/deploy/marsi-xsession.sh" -- -nocursor
-```
-
-Run this on the physical console; `startx` over a normal SSH connection is not
-the same as launching a local graphical session.
-
-On an existing desktop, open a terminal in the project directory and run:
-
-```bash
-.venv-pi/bin/python -m marsi_local.pi
-```
-
-The default display is fullscreen: black, Mars red, green phosphor, a small ASCII
-Marsi and machine readings. Escape makes it a window; Ctrl+Q or typed `exit` closes
-it. Use `--windowed` during development. Type a message and press Enter or SEND
-before testing the microphone. Both sides of conversations remain in the
-scrollable journal; OLDER TRANSMISSIONS loads earlier pages. The display supports
-800×480 and 480×320, with smaller lettering on the smaller screen.
-
-## 3. Test the microphone and speaker
+## 2. Test the microphone and speaker before opening Marsi
 
 For a **Bluetooth receiver or headset**, follow the
 [Bluetooth audio guide](bluetooth-audio.md) first. Lite needs audio services to
@@ -111,11 +86,47 @@ We request mono 16-bit input at 16 kHz. If the microphone does not support that
 rate, try `MARSI_MIC_RATE=48000`; the server also accepts 22.05 and 44.1 kHz.
 
 Set `MARSI_SPEAKER_DEVICE` to an ALSA playback name such as `plughw:1,0` when
-needed. Use the number actually reported on your Pi. Test the output with:
+needed. Use the number actually reported on your Pi. With Marsi closed, run:
 
 ```bash
-speaker-test -t sine -c 1 -l 1
+.venv-pi/bin/python -m marsi_local.audio --check
 ```
+
+This works through SSH as well as the local console and loads `.env.pi`. It plays
+a short tone, records five seconds through Marsi's actual microphone code, then
+plays your words back. Answer `y` to each question only if you heard the correct
+sound. The sample is removed after testing and is not sent to Ubuntu. If it
+fails, use [audio check and recovery](audio-check.md) before proceeding.
+`--status` instead of `--check` gives a silent readiness report.
+
+## 3. Open the display and test conversation by voice
+
+From the Pi's local console on Lite:
+
+```bash
+chmod +x deploy/marsi-xsession.sh
+startx "$HOME/marsi-companion/deploy/marsi-xsession.sh" -- -nocursor
+```
+
+Run this on the physical console; `startx` over a normal SSH connection is not
+the same as launching a local graphical session.
+
+On an existing desktop, open a terminal in the project directory and run:
+
+```bash
+.venv-pi/bin/python -m marsi_local.pi
+```
+
+The default display is fullscreen: black, Mars red, green phosphor, a small ASCII
+Marsi and machine readings. Escape makes it a window; Ctrl+Q or typed `exit` closes
+it. Use `--windowed` during development. Both sides of conversations remain in
+the scrollable journal; OLDER TRANSMISSIONS loads earlier pages. The display
+supports 800×480 and 480×320, with smaller lettering on the smaller screen.
+
+Startup checks audio readiness silently in the background and adds any warnings
+to the local terminal view; typed conversation remains available. It does not
+play a test tone or record you. Enable Voice, type a sentence and press Enter or
+SEND. Hear Marsi's spoken reply before trying speech recognition.
 
 Press **TALK** or **F8**, speak for a few seconds, then press **FINISH** or **F8**
 again. F8 applies while Marsi has keyboard focus; holding it down does not start

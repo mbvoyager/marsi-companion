@@ -15,6 +15,7 @@ from .client import ClientError, HELP, command
 from .liturgy import BLACK, GREEN, RED, PORTRAITS, without_emoji
 from .telemetry import Telemetry, inscription
 from .config import ROOT
+from .audio import CHECK_COMMAND
 
 
 class Display:
@@ -276,10 +277,10 @@ class Display:
                     play(base64.b64decode(result["audio_base64"], validate=True), self.set_playback)
                     if result.get("entry_id"):
                         self.events.put(("spoken", result["entry_id"]))
-                except (OSError, subprocess.SubprocessError, ValueError):
-                    self.events.put(("warning", "[VOX] Text received; speaker playback failed."))
+                except (OSError, subprocess.SubprocessError, ValueError) as error:
+                    self.events.put(("warning", f"[VOX] {error}. Run {CHECK_COMMAND}"))
         except Exception as error:
-            detail = str(error) if isinstance(error, (ClientError, ValueError)) else "Microphone unavailable. Check the Pi audio device."
+            detail = str(error) if isinstance(error, (ClientError, ValueError)) else "Request failed. Check the Pi display log and server diagnostics."
             self.events.put(("error", detail))
         finally:
             self.events.put(("done", None))
@@ -454,10 +455,12 @@ class Display:
                     temporary.replace(self.voice_marker)
                 except OSError:
                     self.status.set("[VOX] Could not save the spoken-observance marker.")
+            elif kind == "audio_status":
+                self.show_text("[VOX / LOCAL CHECK]\n" + "\n".join(result)
+                               + "\nClose Marsi, then run " + CHECK_COMMAND)
             elif kind in ("warning", "error"):
                 self.status.set(result)
-                if kind == "error":
-                    self.show_text("[UNSEALED / ERROR] " + result)
+                self.show_text("[UNSEALED / " + kind.upper() + "] " + result)
             elif kind == "recorded":
                 self.recording = False
                 self.mode = "thinking"

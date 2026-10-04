@@ -10,6 +10,7 @@ from unittest.mock import Mock, patch
 
 from marsi_local.liturgy import BLACK, GREEN, RED, artwork
 from marsi_local.pi import Display
+from marsi_local.audio import AudioError
 
 
 class PreviewClient:
@@ -143,6 +144,16 @@ with tempfile.TemporaryDirectory() as state:
         display.receive_entries([{"id": 4, "at": now, "kind": "sermon", "role": "marsi",
                                   "text": "A manual little sermon.", "spoken_text": "A manual little sermon.", "scheduled": 0}])
         assert display.pending_spoken is None, "Manual sermons must not be automatically replayed"
+        display.events.put(("audio_status", ["Microphone route unavailable."]))
+        display.tick()
+        assert "Microphone route unavailable" in display.reply.get("1.0", "end")
+        with patch("marsi_local.pi.play", side_effect=AudioError("ALSA test playback failure")):
+            display.worker(lambda: {"text": "A little reply.", "audio_base64": "AA=="}, True)
+        display.tick()
+        assert "ALSA test playback failure" in display.reply.get("1.0", "end"), "Playback diagnostics must remain visible"
+        display.worker(Mock(side_effect=AudioError("PortAudio test capture failure")), False)
+        display.tick()
+        assert "PortAudio test capture failure" in display.reply.get("1.0", "end"), "Capture errors must identify the audio layer"
         client.art.reset_mock()
         display.start_task = Mock()
         display.input.insert(0, "art")

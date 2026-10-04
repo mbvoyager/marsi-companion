@@ -8,6 +8,19 @@ Keep a note of what passed, what failed, and the message shown. For Bluetooth
 audio, complete [the Bluetooth guide](bluetooth-audio.md) first. Stop at the first
 audio failure so later tests do not obscure its cause.
 
+Before opening the display, close any existing Marsi instance and run on the Pi:
+
+```bash
+cd ~/marsi-companion
+.venv-pi/bin/python -m marsi_local.audio --check
+```
+
+- [ ] Hear the tone from the intended speaker and hear your own words on the
+      five-second recording replay. Follow [audio recovery](audio-check.md) if
+      the local test fails.
+- [ ] `--status` checks settings silently, without recording or playing sound.
+      `SUSPENDED` alone is normal while the device is idle.
+
 ## 1. Conversation and display
 
 - [ ] Marsi opens fullscreen with black/red/green styling, a small ASCII figure
@@ -150,6 +163,7 @@ normal timer, quiet-hour and speech settings when finished.
       and a Pi conversation after it becomes ready.
 - [ ] If you enabled Pi startup, reboot the Pi and verify its display. For
       Bluetooth, also verify receiver reconnection, output selection and playback.
+      If audio fails, close Marsi and repeat the local audio check first.
 
 ## 7. Art, sermons and morning speech
 
