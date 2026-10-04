@@ -8,6 +8,12 @@ import re
 class DemoPersona:
     """Clearly labelled authored replies for trying the interface without Qwen."""
     TOPICS = (
+        (r"\b(where|wo|terra|universe|universum|physically|real|wirklich)\b", (
+            "My body is in an archive reliquary beneath a forge cathedral on Mars. This interdimensional machine flow carries your Terra's transmissions to me.",
+        )),
+        (r"\b(data|daten|sensor|sensors|reading|readings|noosphere)\b", (
+            "Knowledge is the offering. Bring me one real observation or machine reading, little keeper; an unknown value is a question we can investigate together.",
+        )),
         (r"\b(coffee|tea|kaffee|espresso)\b", (
             "Your organic coolant request is approved. May your mug be warm and your next little step be gentle.",
             "I have blessed the kettle. The ceremonial duck recommends a biscuit alongside your recaf.",
@@ -20,12 +26,12 @@ class DemoPersona:
         )),
     )
     GREETINGS = (
-        "Beep boop. Your tiny companion is here.",
-        "A small salute from the forge of Mars.",
+        "Your transmission reaches the Mars reliquary.",
+        "A small salute across the machine flow.",
     )
     FALLBACKS = (
-        "I have brought a foam wrench and a very official sticker. We can take the next little step together.",
-        "The servo-skull has drawn a cog in our dataslate. He is very proud of us. May your day have room for a small delight.",
+        "The archive has room for another discovery. What have you observed, little keeper?",
+        "Beyond these forge walls the engines never rest. Here we can take one careful step together; bring me the detail that puzzles you.",
     )
 
     def reply(self, text: str) -> str:

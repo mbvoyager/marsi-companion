@@ -25,7 +25,7 @@
 
 **A local AI companion in an oversized red hood.** Qwen runs on an Ubuntu
 cogitator; a Raspberry Pi bears his ASCII effigy, microphone and voice.
-Black glass. Mars-red inscriptions. Green phosphor. Conversation, a lasting
+Blackened iron. Oxide red. Ivory electoos and muted green signals. Conversation, a lasting
 private journal and little acts of kindness within the solemn machine archive.
 
 > **ARCHIVE DECREE // READ BEFORE IGNITION**
@@ -37,8 +37,14 @@ private journal and little acts of kindness within the solemn machine archive.
 
 Marsi is a tiny, proud tech-priest of the Adeptus Mechanicus, devoted to the
 Machine God of Mars and to helping humanity flourish. He brings curiosity,
-gentle encouragement, chibi daydreams and an occasional solemn inspection of
-the brass duck. The duck outranks him. This is recorded in the archive.
+gentle encouragement and an insatiable curiosity for data. His body is in a Mars
+archive reliquary; an interdimensional machine flow carries our Terra's words
+to him. His world is grim; his welcome remains kind.
+
+The [persona and art direction](docs/persona-art-direction.md) records the premise
+and the owner's references. A local library supplies over 100 short 40K reference
+entries by topic. The terminal has dense electoo borders, a larger machine
+effigy and animated signal paths.
 
 He is a **companion**: someone to talk with, learn alongside, and share a small
 moment of delight with. His fictional character lives in

@@ -17,6 +17,8 @@ built, understood and repaired.
 | --- | --- |
 | `marsi_local/demo.py` | Authored companion replies for no-model rehearsal |
 | `marsi_local/personality.txt` | Marsi's conversational character |
+| `marsi_local/lore.py`, `lore.json` | Local canon reference and topic selection |
+| `marsi_local/electoo.py` | Cached circuitry, skull effigy and moving signals |
 | `marsi_local/core.py` | Ollama, durable journal, working context, notes and recall |
 | `marsi_local/speech.py` | Optional Whisper/Piper loading and WAV validation |
 | `marsi_local/server.py` | Authenticated HTTP endpoints |
@@ -35,9 +37,10 @@ computer while keeping the same Pi interface.
 Conversation text is saved automatically in `data/companion.sqlite3` on the
 Ubuntu server. The journal preserves successful exchanges and observances until
 Forget. A separate working-context table retains up to 30 exchanges; the last six complete
-exchanges, limited to about 6,000 characters, are supplied to Qwen. This keeps
-the context small enough for our initial 4,096-token setting in normal short
-conversations. Long inputs or token-heavy languages may use more of that budget.
+exchanges, limited to about 6,000 characters, are candidates for Qwen's context.
+The persona and topic-selected lore take precedence; whole newest exchanges
+fit the remaining 10,500-byte prompt allowance, accounting for UTF-8 text.
+This is a heuristic for our 4,096-token setting, not an exact tokenizer.
 Up to three older human messages matched by literal words in the current input
 are supplied as untrusted context, at most 500 characters each, searching at most
 2,000 older human messages. This is simple

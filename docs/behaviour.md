@@ -1,17 +1,48 @@
 # Marsi's appearance, routines and memory
 
-The interface is a terminal-like archive: black background, Mars red, bright
-green, a small animated ASCII tech-priest in the corner and original circuit,
-cog and skull inscriptions. It uses ordinary Tk widgets, not a terminal emulator.
-Typing and voice remain available. Marsi's persona is kind, extremely cute and
-curious about machines. His outward style is solemn; his expressions use ASCII
-such as `^^`, `:D`, `:P` and `<3`. A response filter removes emoji if Qwen ignores
-the persona instruction.
+The terminal archive wears blackened iron, oxide red, worn ivory and muted green.
+Parallel circuit traces, cog teeth and mechanical inscriptions span its upper
+and lower borders and archive rail. An elongated skull reliquary stands beside
+the journal. Travelling signals and optical lenses respond to idle, listening,
+thinking and speaking states. Static drawings are cached; the five-frame-per-second
+animation moves existing items. Typing, voice and history remain available at
+800x480 and 480x320. This uses ordinary Tk widgets, not a terminal emulator.
+
+MARSI speaks as a small, warm Tech-Priest physically beneath a forge cathedral
+on Mars in the Warhammer 40,000 universe. The terminal is an aperture through
+an unexplained interdimensional machine flow to our present-day, near-side Terra.
+He knows our world has computers and publications describing his universe.
+Imperial Terra and our Terra remain distinct, as do their calendars. This
+connection and his personal reliquary are original character lore.
+
+His hunger is for data: observations, readings, diagrams, histories and tested
+ideas. He asks a specific question when useful, without demanding secrets,
+money or constant attention. Unknown telemetry stays unknown. His appearance
+is grim; his manner remains gentle. An explicit question about the actual
+software receives an honest answer; ordinary conversation stays in character.
 
 The artworks are original procedural ASCII compositions inspired by sacred
-machine diagrams. They do not reproduce rulebook illustrations or require an
+machine diagrams, guided by the owner's four electoo and reliquary references.
+They do not reproduce rulebook illustrations or require an
 image-generation model. Hardware readings influence the random composition,
 and the caption names the readings used. `art` makes another composition now.
+
+The local [lore library](../marsi_local/lore.json) contains over 100 short
+reference entries across Mechanicus, Imperial, Chaos and alien subjects, with
+official source links. Core setting facts accompany every Qwen conversation;
+up to three topic records are selected by English/German aliases and recent
+context, within 2,800 characters. Whole newest exchanges use the remaining
+prompt budget. This is local retrieval, not training, live browsing or an
+exhaustive encyclopaedia. The 10,500-byte prompt allowance is a heuristic for
+the model's 4,096-token context, not an exact tokenizer; long prompts and
+token-heavy languages can still exceed it.
+Optional notes and older recalled messages are also bounded to 1,600 and 800
+UTF-8 bytes respectively, preserving complete values and favouring newer ones.
+Their full saved versions remain in the database.
+
+Restart the server after changing persona or lore. Restart the Pi display for
+artwork changes. All machine readings are actual supplied numbers or unknown;
+travelling decorative lights do not measure a literal interdimensional signal.
 
 ## Routine schedule
 

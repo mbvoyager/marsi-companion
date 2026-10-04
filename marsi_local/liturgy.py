@@ -9,8 +9,7 @@ import re
 import textwrap
 
 from .telemetry import inscription, reading
-
-BLACK, RED, GREEN = "#000000", "#a52a32", "#39ff14"
+from .electoo import BLACK, RED, GREEN
 
 PORTRAITS = (
     "     .-===-.\n    /  ___  \\\n   /  /0 0\\  \\\n   |  | ^^ |  |\n   |  \\___/  |\n  /| [==O==] |\\\n /_|___|||___|_\\\n   /___|||___\\\n      /   \\\n     [_] [_]",
@@ -36,11 +35,16 @@ def artwork(readings, seed):
     encoded = json.dumps(readings, sort_keys=True)
     rng = random.Random(hashlib.sha256((str(seed) + encoded).encode()).digest())
     tracks = []
-    for _ in range(3):
-        tracks.append("  " + "".join(rng.choice(("--", "::", "[]", "==", "||", "01")) for _ in range(14)))
+    glyphs = ("(O)", "[I]", "<+>", "[V]", "{0}")
+    for _ in range(4):
+        left, right = rng.choice(glyphs), rng.choice(glyphs)
+        teeth = "/\\" * 2
+        tracks.extend((f"{teeth}{left}==+======+======+=={right}{teeth}",
+                       "|||||  |  ||  |  ||  |  |  |||||",
+                       "+====++===++==+==++===++====+"))
     glyph = rng.choice((
         "        .--[O]--.\n     o==| /___\\ |==o\n    [::]| |0 0| |[::]\n     o==| \\|||/ |==o\n        '--|||--'\n           |||",
-        "         .-====-.\n       /  .----.  \\\n      /   | ^^ |   \\\n      |   '----'   |\n     /|___[O]_____|\\\n       /__|||__\\",
+        "      \\||   /\\   ||/\n       \\|  /00\\  |/\n      []=|  \\||/  |=[]\n       /|==[O]==|\\\n      /_|__|||__|_\\\n         /_|||_\\",
         "        o==[]==o\n        || /\\ ||\n     []=||[00]||=[]\n        || \\_/||\n        o==[]==o\n           ||",
     ))
     meters = []
@@ -50,9 +54,10 @@ def artwork(readings, seed):
             meters.append(f"{name.upper()} LOAD {reading(data.get('load1'))} / {reading(data.get('temperature_c'), 'C')}")
         else:
             meters.append(f"{name.upper()} DATA UNAVAILABLE")
-    text = frame("ELECTOO / MACHINE-SHAPED SIGIL", "\n".join(tracks) + "\n" + glyph + "\n" + "\n".join(meters))
-    return {"text": text + "\nA little seal from the machines in our care. ^^",
-            "spoken_text": "I made a little machine sigil from our hardware readings. Every cog deserves a tiny portrait.",
+    body = "\n".join(tracks[:6]) + "\n" + glyph + "\n" + "\n".join(tracks[6:])
+    text = frame("ELECTOO / ARCHIVE RELIQUARY", body + "\n" + "\n".join(meters) + "\nKNOWLEDGE IS THE OFFERING")
+    return {"text": text + "\nBring me another observation, little keeper.",
+            "spoken_text": "An electoo from the readings carried across our machine flow. Bring me another observation, little keeper.",
             "source": "art", "animation": "doodle"}
 
 

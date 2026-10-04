@@ -9,6 +9,7 @@ from tkinter import font as tkfont
 from unittest.mock import Mock, patch
 
 from marsi_local.liturgy import BLACK, GREEN, RED, artwork
+from marsi_local.electoo import BONE, BRASS
 from marsi_local.pi import Display
 from marsi_local.audio import AudioError
 
@@ -72,15 +73,23 @@ def render_windows(root, destination):
                         character = widget.get(index)
                         if box and character not in "\n\t":
                             tags = widget.tag_names(index)
-                            color = GREEN if "human" in tags or "system" in tags else RED
+                            color = GREEN if "human" in tags else BRASS if "system" in tags else BONE
                             draw.text(box[:2], character, fill=color, font=face)
                         index = widget.index(index + "+1c")
                 else:
                     for item in widget.find_all():
                         coords = widget.coords(item)
                         color = widget.itemcget(item, "fill")
+                        outline = widget.itemcget(item, "outline") if widget.type(item) in ("rectangle", "oval", "polygon") else ""
                         if widget.type(item) == "rectangle":
-                            draw.rectangle(coords, fill=color)
+                            draw.rectangle(coords, fill=color or None, outline=outline or None)
+                        elif widget.type(item) == "oval":
+                            draw.ellipse(coords, fill=color or None, outline=outline or None)
+                        elif widget.type(item) == "line":
+                            draw.line(list(zip(coords[::2], coords[1::2])), fill=color,
+                                      width=max(1, round(float(widget.itemcget(item, "width")))))
+                        elif widget.type(item) == "polygon":
+                            draw.polygon(list(zip(coords[::2], coords[1::2])), fill=color or None, outline=outline or None)
                         elif widget.type(item) == "text":
                             bounds = widget.bbox(item)
                             face = font(widget.itemcget(item, "font"))
@@ -110,8 +119,8 @@ with tempfile.TemporaryDirectory() as state:
         display.readings = {"pi": readings, "server": dict(readings, ram_total_mb=7800, ram_used_mb=2100)}
         now = datetime.now().astimezone().isoformat()
         display.receive_entries([
-            {"id": 1, "at": now, "kind": "chat", "role": "human", "text": "Good morning, little priest."},
-            {"id": 2, "at": now, "kind": "chat", "role": "marsi", "text": "May your first little step be kind to you. I kept a cog for your pocket. ^^"},
+            {"id": 1, "at": now, "kind": "chat", "role": "human", "text": "Where are you, MARSI?"},
+            {"id": 2, "at": now, "kind": "chat", "role": "marsi", "text": "Beneath a forge cathedral on Mars, little keeper. The machine flow carries your Terra's words into my reliquary. What have you observed today?"},
             {"id": 3, "at": now, "kind": "art", "role": "marsi", "text": client.art()["text"]},
         ], initial=True)
         display.polling = True
@@ -132,11 +141,18 @@ with tempfile.TemporaryDirectory() as state:
                 assert font.measure("+" + "=" * 38 + "+") < display.reply.winfo_width() - 16, "ASCII art should not wrap"
                 assert display.reply.cget("bg") == BLACK
                 assert display.reply.tag_cget("human", "foreground") == GREEN
-                assert display.reply.tag_cget("marsi", "foreground") == RED
+                assert display.reply.tag_cget("marsi", "foreground") == BONE
+                ids = display.canvas.find_all()
+                signals = [display.canvas.coords(item) for item in display.electoos[-1].signals]
+                display.draw(124.4)
+                assert display.canvas.find_all() == ids, "Static artwork should be cached on the Pi"
+                assert signals != [display.canvas.coords(item) for item in display.electoos[-1].signals], "Signals should move"
             render_dir = os.getenv("MARSI_RENDER_DIR")
             if render_dir and os.name == "nt":
                 destination = Path(render_dir)
                 destination.mkdir(parents=True, exist_ok=True)
+                display.reply.yview_moveto(0)
+                root.update()
                 render_windows(root, destination / f"terminal-{width}x{height}.png")
         display.show_text("One archived line.")
         display.show_text("Another archived line.")

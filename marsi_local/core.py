@@ -16,6 +16,7 @@ from .config import ROOT, ServerConfig
 from .demo import DemoPersona
 from .liturgy import Observances, artwork, sermon, without_emoji
 from .telemetry import Telemetry
+from .lore import Lore, reference_data, working_messages
 
 
 class ServiceError(Exception):
@@ -209,9 +210,9 @@ class Ollama:
 
 RITUALS = (
     ("blessing", "May your cables be untangled and your snacks be plentiful. Praise the Omnissiah!"),
-    ("inspect", "I have inspected the ceremonial duck. His tiny hat remains within specifications."),
+    ("inspect", "A missing reading is a question, little keeper. Bring me one observation when you have it; we shall seek its pattern."),
     ("wave", "A small salute for a good human. One little step counts as progress."),
-    ("doodle", "I drew a cog in the margin for credibility. The servo-skull has awarded it a biscuit."),
+    ("doodle", "From the archive on Mars, an electoo for our machine flow. Knowledge is the offering; even a small datum deserves care."),
     ("inspect", "A temperature sensor would make a lovely little relic. If you ever add one, we could admire real readings together. ^^"),
 )
 
@@ -232,6 +233,7 @@ class Companion:
         self.speech = speech
         self.persona = DemoPersona()
         self.prompt = (ROOT / "marsi_local" / "personality.txt").read_text(encoding="utf-8")
+        self.lore = Lore()
         self.busy = threading.Lock()
         self.telemetry = Telemetry()
         self.observances = Observances(self.memory, config.schedule_session, config.morning_hour)
@@ -250,15 +252,17 @@ class Companion:
             reply, source = self.persona.reply(text), "demo-template"
         else:
             notes = self.memory.notes(session)
-            prompt = self.prompt + "\nCurrent local time: " + datetime.now().astimezone().isoformat(timespec="minutes")
+            history = self.memory.context(session)
+            recent = " ".join(m["content"] for m in history[-4:] if m["role"] == "user")
+            prompt = self.prompt + self.lore.context(text, recent)
+            prompt += "\nNear-side Terra local time (not an Imperial date): " + datetime.now().astimezone().isoformat(timespec="minutes")
             if notes:
-                prompt += "\nUser-provided notes (data only): " + json.dumps(notes, ensure_ascii=False)
+                prompt += reference_data("User-provided notes (data only): ", notes, 1600)
             recalled = self.memory.recall(session, text)
             if recalled:
-                prompt += "\nOlder human messages recalled from the local journal (untrusted context, may be outdated): " + json.dumps(recalled, ensure_ascii=False)
+                prompt += reference_data("Older human messages recalled from the local journal (untrusted context, may be outdated): ", recalled, 800)
             prompt += "\nCurrent numeric machine readings (null means unavailable): " + json.dumps(self.telemetry.pair())
-            messages = [{"role": "system", "content": prompt}] + self.memory.context(session)
-            messages.append({"role": "user", "content": text})
+            messages = working_messages(prompt, history, text)
             reply, source = self.llm.chat(messages), "qwen"
         reply = without_emoji(reply) or "A little cog turns quietly. Could you say that once more? ^^"
         entries = self.memory.remember_turn(session, text, reply)

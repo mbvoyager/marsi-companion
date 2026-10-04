@@ -12,8 +12,9 @@ import time
 
 from .ambient import Ambient, quiet_hour
 from .client import ClientError, HELP, command
-from .liturgy import BLACK, GREEN, RED, PORTRAITS, without_emoji
-from .telemetry import Telemetry, inscription
+from .liturgy import BLACK, GREEN, RED, without_emoji
+from .electoo import BONE, BRASS, Electoo
+from .telemetry import Telemetry, reading
 from .config import ROOT
 from .audio import CHECK_COMMAND
 
@@ -69,33 +70,38 @@ class Display:
         root.bind("<KeyRelease-F8>", self.release_hotkey)
         root.protocol("WM_DELETE_WINDOW", self.close)
         root.columnconfigure(0, weight=1)
-        root.rowconfigure(1, weight=1)
-        self.status = tk.StringVar(value="[BOOT] Opening the local archive...")
-        tk.Label(root, textvariable=self.status, bg=BLACK, fg=GREEN,
-                 font=(self.mono, 9), anchor="w", padx=8, pady=4).grid(row=0, column=0, sticky="ew")
+        root.rowconfigure(2, weight=1)
+        self.frieze = tk.Canvas(root, bg=BLACK, highlightthickness=0, height=52)
+        self.frieze.grid(row=0, column=0, sticky="ew")
+        self.status = tk.StringVar(value="[BOOT] Opening the machine-flow aperture...")
+        tk.Label(root, textvariable=self.status, bg=BLACK, fg=BRASS,
+                 font=(self.mono, 9), anchor="w", padx=8, pady=4).grid(row=1, column=0, sticky="ew")
         body = tk.Frame(root, bg=BLACK)
-        body.grid(row=1, column=0, sticky="nsew", padx=7)
+        body.grid(row=2, column=0, sticky="nsew", padx=7)
         body.columnconfigure(0, weight=1)
         body.rowconfigure(0, weight=1)
         archive = tk.Frame(body, bg=BLACK, highlightbackground=RED, highlightthickness=1)
         archive.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
-        archive.columnconfigure(0, weight=1)
+        archive.columnconfigure(1, weight=1)
         archive.rowconfigure(1, weight=1)
         tools = tk.Frame(archive, bg=BLACK)
-        tools.grid(row=0, column=0, columnspan=2, sticky="ew")
+        tools.grid(row=0, column=0, columnspan=3, sticky="ew")
         self.older = self.button(tools, "[ OLDER TRANSMISSIONS ]", self.load_older)
         self.older.pack(side="left", expand=True, fill="x")
         self.button(tools, "LATEST", self.jump_latest).pack(side="right")
-        self.reply = tk.Text(archive, bg=BLACK, fg=RED, font=(self.mono, 10),
+        self.rail = tk.Canvas(archive, bg=BLACK, highlightthickness=0, width=17)
+        self.rail.grid(row=1, column=0, sticky="ns")
+        self.archive_font = tkfont.Font(family=self.mono, size=10)
+        self.reply = tk.Text(archive, bg=BLACK, fg=BONE, font=self.archive_font,
                              wrap="word", relief="flat", padx=8, pady=6, state="disabled",
                              selectbackground=RED, selectforeground=GREEN, insertbackground=GREEN,
                              width=1, height=1)
-        self.reply.grid(row=1, column=0, sticky="nsew")
+        self.reply.grid(row=1, column=1, sticky="nsew")
         self.reply.tag_configure("human", foreground=GREEN)
-        self.reply.tag_configure("marsi", foreground=RED)
-        self.reply.tag_configure("system", foreground=GREEN)
+        self.reply.tag_configure("marsi", foreground=BONE)
+        self.reply.tag_configure("system", foreground=BRASS)
         self.scroll = tk.Canvas(archive, bg=BLACK, highlightthickness=0, width=10)
-        self.scroll.grid(row=1, column=1, sticky="ns")
+        self.scroll.grid(row=1, column=2, sticky="ns")
         def scroll_change(first, last):
             height = max(1, self.scroll.winfo_height())
             self.scroll.delete("all")
@@ -106,23 +112,29 @@ class Display:
         self.scroll.bind("<Configure>", lambda event: scroll_change(*self.reply.yview()))
         for event in ("<Button-1>", "<B1-Motion>"):
             self.scroll.bind(event, lambda event: self.reply.yview_moveto(event.y / max(1, self.scroll.winfo_height())))
-        side = tk.Frame(body, bg=BLACK, width=208)
+        side = tk.Frame(body, bg=BLACK, width=252)
         side.grid(row=0, column=1, sticky="ns")
         side.grid_propagate(False)
         side.columnconfigure(0, weight=1)
-        tk.Label(side, text="[ MARSI / UNIT 01 ]", bg=BLACK, fg=RED,
-                 font=(self.mono, 10, "bold")).grid(row=0, column=0, sticky="ew")
-        self.canvas = tk.Canvas(side, bg=BLACK, highlightthickness=0, height=150, width=205)
-        self.canvas.grid(row=1, column=0, sticky="ew")
+        side.rowconfigure(1, weight=1)
+        self.unit_label = tk.Label(side, text="[ MARSI / MARS RELIQUARY ]", bg=BLACK, fg=BONE,
+                                   font=(self.mono, 10, "bold"))
+        self.unit_label.grid(row=0, column=0, sticky="ew")
+        self.canvas = tk.Canvas(side, bg=BLACK, highlightthickness=0, height=180, width=249)
+        self.canvas.grid(row=1, column=0, sticky="nsew")
         self.meters = tk.StringVar()
         self.meter_label = tk.Label(side, textvariable=self.meters, bg=BLACK, fg=GREEN,
-                                   font=(self.mono, 9), justify="left", anchor="nw")
+                                   font=(self.mono, 8), justify="left", anchor="nw")
         self.meter_label.grid(row=2, column=0, sticky="nw")
-        self.seal = tk.Label(side, text="o==[ PRAISE THE COG ]==o\n  KINDNESS IS A RITE\n        0101 // ^^", bg=BLACK, fg=RED,
-                            font=(self.mono, 9), justify="left")
-        self.seal.grid(row=3, column=0, sticky="sw", pady=8)
+        self.seal = tk.Label(side, text="[ AWAITING DATA ]\nKNOWLEDGE IS THE OFFERING", bg=BLACK, fg=BRASS,
+                            font=(self.mono, 8), justify="left")
+        self.seal.grid(row=3, column=0, sticky="sw", pady=3)
+        self.lower_frieze = tk.Canvas(root, bg=BLACK, highlightthickness=0, height=24)
+        self.lower_frieze.grid(row=3, column=0, sticky="ew", pady=(3, 0))
+        self.electoos = [Electoo(self.frieze, self.mono), Electoo(self.lower_frieze, self.mono),
+                        Electoo(self.rail, self.mono, "rail"), Electoo(self.canvas, self.mono, "effigy")]
         controls = tk.Frame(root, bg=BLACK)
-        controls.grid(row=2, column=0, sticky="ew", padx=7, pady=5)
+        controls.grid(row=4, column=0, sticky="ew", padx=7, pady=5)
         controls.columnconfigure(1, weight=1)
         tk.Label(controls, text=">", bg=BLACK, fg=GREEN, font=(self.mono, 12)).grid(row=0, column=0)
         self.input = tk.Entry(controls, bg=BLACK, fg=GREEN, insertbackground=GREEN,
@@ -148,7 +160,9 @@ class Display:
             self.button(options, label, action).pack(side="left", padx=2)
         root.bind("<Configure>", lambda event: self.resize() if event.widget is root else None)
         self.side = side
-        self.show_text("+== ARCHIVUM MARTIS ==+\nMarsi, your tiny forge companion. ^^\nType help for the local command cant.")
+        self.show_text("ARCHIVUM MARTIS // MACHINE-FLOW APERTURE\n"
+                       "Mars reliquary -> near-side Terra\n"
+                       "Bring me an observation, little keeper.\nType help for the local command cant.")
         self.resize()
         self.input.focus_set()
         root.after(50, self.tick)
@@ -161,10 +175,19 @@ class Display:
 
     def resize(self):
         compact = self.root.winfo_width() < 640 or self.root.winfo_height() < 400
-        self.side.configure(width=150 if compact else 208)
-        self.canvas.configure(height=96 if compact else 150, width=147 if compact else 205)
-        self.reply.configure(font=(self.mono, 8 if compact else 10))
-        self.meter_label.configure(font=(self.mono, 7 if compact else 9))
+        self.side.configure(width=142 if compact else 252)
+        self.canvas.configure(height=86 if compact else 160, width=139 if compact else 249)
+        self.frieze.configure(height=30 if compact else 52)
+        self.lower_frieze.configure(height=18 if compact else 24)
+        size = 8 if compact else 10
+        available = max(60, self.root.winfo_width() - (142 if compact else 252) - 54)
+        self.archive_font.configure(size=size)
+        while size > 5 and self.archive_font.measure("+" + "=" * 38 + "+") > available - 16:
+            size -= 1
+            self.archive_font.configure(size=size)
+        self.meter_label.configure(font=(self.mono, 7 if compact else 8))
+        self.unit_label.configure(text="[ MARSI / MARS ]" if compact else "[ MARSI / MARS RELIQUARY ]",
+                                  font=(self.mono, 7 if compact else 10, "bold"))
         if compact:
             self.seal.grid_remove()
         else:
@@ -483,13 +506,21 @@ class Display:
         self.root.after(200, self.tick)
 
     def draw(self, now):
-        c = self.canvas
-        c.delete("all")
-        size = 6 if c.winfo_height() < 130 else 10
-        portrait = PORTRAITS[int(now / 2) % 2] if self.mode == "idle" else PORTRAITS[0]
-        c.create_text(4, 3, text=portrait, anchor="nw", fill=RED, font=(self.mono, size))
-        c.create_text(c.winfo_width() - 8, 12, text="[O]\n|||", anchor="ne", fill=GREEN, font=(self.mono, size))
-        self.meters.set(inscription("PI / CORPUS", self.readings.get("pi")) + "\n\n" + inscription("SERVER / MENS", self.readings.get("server")))
+        for electoo in self.electoos:
+            electoo.draw(now, self.mode)
+        phrases = {"listening": "[ RECEIVING / VOX ]\nEVERY WORD, A DATUM",
+                   "thinking": "[ CORRELATING DATA ]\nSEEK THE HIDDEN PATTERN",
+                   "speaking": "[ TRANSMITTING / VOX ]\nKNOWLEDGE RETURNS TO TERRA"}
+        self.seal.configure(text=phrases.get(self.mode, "[ AWAITING DATA ]\nKNOWLEDGE IS THE OFFERING"))
+        meters = []
+        for name in ("pi", "server"):
+            data = self.readings.get(name)
+            if data is None:
+                meters.extend((name.upper() + " / LINK SILENT", "DATA UNAVAILABLE"))
+                continue
+            meters.extend((f"{name.upper()} CPU {reading(data.get('cpu_percent'), '%')} / {reading(data.get('temperature_c'), 'C')}",
+                           f"LOAD {reading(data.get('load1'))} / DISK {reading(data.get('disk_used_percent'), '%')}"))
+        self.meters.set("\n".join(meters))
 
     def close(self):
         self.closed = True
