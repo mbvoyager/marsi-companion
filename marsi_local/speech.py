@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import argparse
 import io
+import logging
+from pathlib import Path
 import wave
 
 from .config import ServerConfig, ROOT, load_env
@@ -10,6 +12,7 @@ from .core import ServiceError
 
 MAX_AUDIO_BYTES = 2_000_000
 MAX_AUDIO_SECONDS = 20
+LOG = logging.getLogger("marsi.local.speech")
 
 
 def validate_wav(data: bytes) -> None:
@@ -46,24 +49,50 @@ class Speech:
                     download_root=str(ROOT / "models" / "whisper"),
                 )
             except Exception as error:
+                # Exception messages can contain private data; log only their type.
+                LOG.error("Whisper model loading failed (%s)", type(error).__name__)
                 raise ServiceError("Speech recognition unavailable. Install server speech packages and pre-download Whisper.") from error
         return self.whisper
 
-    def transcribe(self, data: bytes) -> str:
+    def transcribe(self, data: bytes, *, vad_filter: bool = True) -> str:
         validate_wav(data)
         try:
             segments, _ = self.load_whisper().transcribe(
                 io.BytesIO(data), language=self.config.whisper_language,
-                beam_size=1, vad_filter=True, condition_on_previous_text=False,
+                beam_size=1, vad_filter=vad_filter, condition_on_previous_text=False,
             )
             text = " ".join(segment.text.strip() for segment in segments).strip()
         except ServiceError:
             raise
         except Exception as error:
-            raise ServiceError("Speech recognition failed. Try a shorter, clearer recording.") from error
+            LOG.error("Speech transcription failed (%s)", type(error).__name__)
+            raise ServiceError("Speech recognition failed on Ubuntu. Check the server's speech diagnostics.") from error
         if not text:
             raise ServiceError("I did not catch any speech. Please try again.", 422)
         return text
+
+    def check_recognition(self, *, no_vad: bool = False):
+        """Exercise recognition with in-memory silence, without storing a turn."""
+        output = io.BytesIO()
+        with wave.open(output, "wb") as wav:
+            wav.setnchannels(1)
+            wav.setsampwidth(2)
+            wav.setframerate(16000)
+            wav.writeframes(b"\0\0" * 16000)
+        audio = output.getvalue()
+        stages = [(False, "Whisper transcription")]
+        if not no_vad:
+            stages.insert(0, (True, "WAV decoding and speech detection"))
+        for vad_filter, label in stages:
+            print(f"Checking {label.lower()}...", flush=True)
+            try:
+                self.transcribe(audio, vad_filter=vad_filter)
+            except ServiceError as error:
+                if error.status != 422:
+                    raise
+            # Silence can produce an empty result or a hallucinated transcript;
+            # this tests engine execution, not recognition quality.
+            print(f"{label} check passed.", flush=True)
 
     def synthesize(self, text: str) -> bytes:
         if not self.config.piper_model:
@@ -86,11 +115,30 @@ class Speech:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Pre-load local speech models before going offline")
+    parser = argparse.ArgumentParser(description="Pre-load or diagnose Ubuntu's local speech engines")
     parser.add_argument("--env", default=".env.server")
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument("--check-recognition", action="store_true",
+                       help="Test decoding, speech detection and Whisper using in-memory silence")
+    modes.add_argument("--transcribe", type=Path,
+                       help="Transcribe a local test WAV and print the result; does not call Qwen")
+    parser.add_argument("--no-vad", action="store_true",
+                        help="Skip speech detection for a recognition diagnostic only")
     args = parser.parse_args()
+    if args.no_vad and not (args.check_recognition or args.transcribe):
+        parser.error("--no-vad requires --check-recognition or --transcribe")
     load_env(args.env)
     speech = Speech(ServerConfig.from_env())
+    # Diagnostic failures retain their chained traceback in this explicitly
+    # invoked terminal check. Routine server logs contain no exception text.
+    if args.check_recognition:
+        speech.check_recognition(no_vad=args.no_vad)
+        return
+    if args.transcribe:
+        with args.transcribe.open("rb") as file:
+            audio = file.read(MAX_AUDIO_BYTES + 1)
+        print(speech.transcribe(audio, vad_filter=not args.no_vad))
+        return
     speech.load_whisper()
     print("Whisper is cached locally.")
     if speech.config.piper_model:

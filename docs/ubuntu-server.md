@@ -100,10 +100,14 @@ cd models/piper
 ../../.venv-server/bin/python -m piper.download_voices en_US-lessac-medium
 cd ../..
 .venv-server/bin/python -m marsi_local.speech
+.venv-server/bin/python -m marsi_local.speech --check-recognition
 ```
 
-The last command downloads/caches Whisper tiny and checks the configured Piper
-voice. After it succeeds, both speech engines can run locally. Piper needs the
+The first speech command downloads/caches Whisper tiny and checks the configured
+Piper voice. The recognition check also runs WAV decoding, speech detection and
+Whisper inference using a second of generated silence; it does not save audio or
+conversation. This catches runtime failures that loading the models alone misses.
+After both succeed, test actual speech from the Pi. Piper needs the
 voice's `.onnx` model and matching `.onnx.json` file. The example settings already
 point to `models/piper/en_US-lessac-medium.onnx`.
 
@@ -212,3 +216,60 @@ Ollama also needs its own service running. Inspect it with `systemctl status oll
 Official speech instructions:
 [Whisper CPU configuration](https://github.com/SYSTRAN/faster-whisper) and
 [Piper Python API and voice downloads](https://github.com/OHF-Voice/piper1-gpl/blob/main/docs/API_PYTHON.md).
+
+## Speech recognition fails after the microphone test passes
+
+If a local recording on the Pi is clear, and Marsi can speak typed replies, the
+speaker path and Piper work. A transcription exception still needs diagnosis on
+**Ubuntu**, where Whisper runs. The older message `Speech recognition failed.
+Try a shorter, clearer recording.` also covered software/runtime errors, so it
+did not establish that the recording was unclear.
+
+Run on Ubuntu from the same checkout and user as the server service:
+
+```bash
+cd ~/marsi-companion
+git pull --ff-only
+.venv-server/bin/python -m marsi_local.speech --check-recognition
+```
+
+The command tests two stages: decoding/speech detection, then Whisper inference
+with speech detection skipped. It prints no synthetic transcript, calls neither
+Qwen nor Piper, and does not use the memory database. An empty transcript from
+silence is expected. Passing the check verifies engine execution, not microphone
+selection, transcription accuracy or available RAM while Qwen is also running.
+
+If it fails, keep the **whole traceback**, including the original error before
+Marsi's final message. That identifies the failing package or configuration.
+For a failure in the speech-detection stage, compare with this diagnostic:
+
+```bash
+.venv-server/bin/python -m marsi_local.speech --check-recognition --no-vad
+```
+
+This skips VAD only for that terminal check. Normal Pi voice requests retain
+speech detection. Do not change packages or permanently disable it before
+identifying the actual exception. Faster-whisper documents its
+[speech detection and generator-based transcription](https://github.com/SYSTRAN/faster-whisper#usage).
+
+After updating the code, restart the running Ubuntu service to load it:
+
+```bash
+systemctl --user restart marsi-server
+journalctl --user -u marsi-server -n 40 --no-pager
+```
+
+Server logs now record the failing exception's class, without its message,
+transcripts, audio or token. Recognition and voice errors preserve their cause
+in an explicitly invoked terminal diagnostic.
+
+For an actual short test WAV copied to Ubuntu, run:
+
+```bash
+.venv-server/bin/python -m marsi_local.speech --transcribe /tmp/marsi-mic-test.wav
+```
+
+Unlike the silent check, this deliberately prints the recognized words in your
+terminal. It does not save a conversation, generate a reply or modify the server.
+For comparison, append `--no-vad`. The WAV must meet the same limits as a Pi
+upload: mono 16-bit PCM, a supported rate, at most 20 seconds and 2 MB.

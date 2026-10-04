@@ -122,6 +122,11 @@ does not record in idle mode or during playback, which avoids most echo loops.
 The recognizer can still mishear speech or noise. Start in a quiet room. A wake
 word and continuous listening are later additions after this flow is reliable.
 
+If the local recording test works but the display reports speech recognition
+failed, follow [Ubuntu's recognition diagnostics](ubuntu-server.md#speech-recognition-fails-after-the-microphone-test-passes).
+The recognizer runs on Ubuntu. A technical recognition failure does not require
+re-pairing a Bluetooth device that already records and plays sound successfully.
+
 Use the [feature test checklist](test-checklist.md) to work through conversation,
 speech, notes, rituals, connection recovery and startup on your actual hardware.
 

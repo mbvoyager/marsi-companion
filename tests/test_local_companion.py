@@ -1,5 +1,6 @@
 """Exercise the actual LAN API and durable memory without model downloads."""
 import base64
+from contextlib import redirect_stdout
 from dataclasses import replace
 import io
 import http.client
@@ -7,8 +8,9 @@ import json
 from pathlib import Path
 import tempfile
 import threading
+from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 import urllib.error
 import urllib.request
 import wave
@@ -19,6 +21,7 @@ from marsi_local.config import ServerConfig, load_env, validate_bind
 from marsi_local.core import Companion, Memory, Ollama, ServiceError
 from marsi_local.server import Server
 from marsi_local.speech import Speech, validate_wav
+from marsi_local.speech import main as speech_main
 
 
 def wav_bytes(seconds=0.1, channels=1, rate=16000):
@@ -191,6 +194,22 @@ class APITests(unittest.TestCase):
         self.assertEqual(result["text"], "The tiny forge is ready.")
         self.assertIn("No voice", result["voice_error"])
 
+    def test_recognition_runtime_failure_is_actionable_private_and_not_saved(self):
+        private_detail = "private recording detail and token"
+        def failed_segments():
+            raise RuntimeError(private_detail)
+            yield
+        speech = Speech(ServerConfig())
+        speech.whisper = SimpleNamespace(transcribe=lambda *args, **kwargs: (failed_segments(), None))
+        with patch.object(self.speech, "transcribe", side_effect=speech.transcribe):
+            with self.assertLogs("marsi.local.speech", level="ERROR") as logged:
+                with self.assertRaisesRegex(ClientError, "Ubuntu") as caught:
+                    self.client.voice(wav_bytes())
+        self.assertNotIn(private_detail, str(caught.exception))
+        self.assertNotIn(private_detail, "\n".join(logged.output))
+        self.assertIn("RuntimeError", "\n".join(logged.output))
+        self.assertEqual(self.app.memory.context("pi"), [])
+
     def test_busy_returns_error_instead_of_overloading_cpu(self):
         with self.app.exclusive():
             with self.assertRaisesRegex(ClientError, "finishing another task"):
@@ -227,6 +246,85 @@ class APITests(unittest.TestCase):
             result = self.client.ritual()
         self.assertEqual(result["source"], "ritual")
         self.assertEqual(self.app.memory.context("pi"), [])
+
+
+class RecognitionTests(unittest.TestCase):
+    def setUp(self):
+        self.speech = Speech(ServerConfig())
+        self.whisper = Mock()
+        self.speech.whisper = self.whisper
+
+    def test_silence_is_distinct_from_a_recognizer_runtime_failure(self):
+        self.whisper.transcribe.return_value = (iter([]), None)
+        with self.assertNoLogs("marsi.local.speech", level="ERROR"):
+            with self.assertRaises(ServiceError) as caught:
+                self.speech.transcribe(wav_bytes())
+        self.assertEqual(caught.exception.status, 422)
+        self.assertIn("did not catch", str(caught.exception))
+
+    def test_diagnostic_runs_detection_and_inference_without_printing_a_transcript(self):
+        self.whisper.transcribe.side_effect = [
+            (iter([SimpleNamespace(text="synthetic hallucination")]), None),
+            (iter([]), None),
+        ]
+        output = io.StringIO()
+        with redirect_stdout(output):
+            self.speech.check_recognition()
+        self.assertNotIn("synthetic hallucination", output.getvalue())
+        self.assertEqual(output.getvalue().count("check passed"), 2)
+        calls = self.whisper.transcribe.call_args_list
+        self.assertEqual([call.kwargs["vad_filter"] for call in calls], [True, False])
+        for call in calls:
+            validate_wav(call.args[0].getvalue())
+
+    def test_diagnostic_preserves_a_failure_during_lazy_segment_iteration(self):
+        original = RuntimeError("decoder backend failed")
+        def segments():
+            raise original
+            yield
+        self.whisper.transcribe.return_value = (segments(), None)
+        with self.assertLogs("marsi.local.speech", level="ERROR"):
+            with redirect_stdout(io.StringIO()), self.assertRaises(ServiceError) as caught:
+                self.speech.check_recognition()
+        self.assertIs(caught.exception.__cause__, original)
+        self.assertEqual(self.whisper.transcribe.call_count, 1)
+
+    def test_diagnostic_can_isolate_a_broken_speech_detector(self):
+        def transcribe(*args, **kwargs):
+            if kwargs["vad_filter"]:
+                raise RuntimeError("speech detector could not start")
+            return iter([]), None
+        self.whisper.transcribe.side_effect = transcribe
+        with self.assertLogs("marsi.local.speech", level="ERROR"):
+            with redirect_stdout(io.StringIO()), self.assertRaises(ServiceError):
+                self.speech.check_recognition()
+        with redirect_stdout(io.StringIO()):
+            self.speech.check_recognition(no_vad=True)
+
+    def test_recognition_cli_skips_voice_loading(self):
+        with patch("sys.argv", ["speech", "--check-recognition"]):
+            with patch("marsi_local.speech.load_env"):
+                with patch("marsi_local.speech.Speech") as engine:
+                    speech_main()
+        engine.return_value.check_recognition.assert_called_once_with(no_vad=False)
+        engine.return_value.load_whisper.assert_not_called()
+        engine.return_value.synthesize.assert_not_called()
+
+    def test_file_diagnostic_transcribes_only_the_supplied_capture(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "test.wav"
+            audio = wav_bytes()
+            path.write_bytes(audio)
+            output = io.StringIO()
+            with patch("sys.argv", ["speech", "--transcribe", str(path), "--no-vad"]):
+                with patch("marsi_local.speech.load_env"):
+                    with patch("marsi_local.speech.Speech") as engine:
+                        engine.return_value.transcribe.return_value = "Hello Marsi"
+                        with redirect_stdout(output):
+                            speech_main()
+        engine.return_value.transcribe.assert_called_once_with(audio, vad_filter=False)
+        engine.return_value.synthesize.assert_not_called()
+        self.assertEqual(output.getvalue(), "Hello Marsi\n")
 
 
 class AudioAndConfigTests(unittest.TestCase):
