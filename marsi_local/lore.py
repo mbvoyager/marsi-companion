@@ -19,6 +19,11 @@ class Lore:
                                 text.casefold().replace("\u2019", "'")))
 
     def context(self, query: str, recent: str = "", limit: int = 2800) -> str:
+        # A follow-up can reuse a lore topic; an unrelated question should not
+        # inherit an entire creed merely because an earlier turn mentioned Mars.
+        followup = re.search(r"\b(they|them|their|it|its|that|those|he|she|sie|ihnen|deren|das|davon|dazu)\b", query, re.I)
+        if not followup:
+            recent = ""
         header = "\nWarhammer 40,000 canon reference (MARSI's machine-flow story is separate):\n"
         text = header + "\n".join("- " + fact for fact in self.foundations)
         ranked = sorted(enumerate(self.records),
@@ -27,7 +32,7 @@ class Lore:
         selected = [record for _, record in ranked
                     if self.score(record, query) or self.score(record, recent)][:3]
         if not selected:
-            selected = [self.records[0]]
+            return ""
         for record in selected:
             block = "\n[" + record["title"] + "]\n" + "\n".join("- " + fact for fact in record["facts"])
             if len(text) + len(block) <= limit:

@@ -24,9 +24,16 @@ class LoreTests(unittest.TestCase):
         lore = Lore()
         self.assertIn("[Necron dynasties]", lore.context("Why did they do that?", "Tell me about Necrons"))
         result = lore.context("Tell me about T'au battlesuits", "Tell me about Necrons")
-        self.assertLess(result.index("[T'au Empire]"), result.index("[Necron dynasties]"))
+        self.assertIn("[T'au Empire]", result)
+        self.assertNotIn("[Necron dynasties]", result)
         self.assertEqual(lore.score(lore.records[0], "marshmallow"), 0)
         self.assertIn("Noosphere", lore.context("Was ist die Noosphäre?"))
+
+    def test_ordinary_questions_do_not_receive_unrelated_creed(self):
+        lore = Lore()
+        for question in ("What is 2 plus 2?", "How was your day?", "I need a little encouragement."):
+            self.assertEqual(lore.context(question, "We previously talked about Mars and Necrons."), "")
+        self.assertIn("[Mechanicus and Mars]", lore.context("Tell me about Mars"))
 
     def test_library_is_substantial_and_has_source_provenance(self):
         lore = Lore()

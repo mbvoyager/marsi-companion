@@ -27,6 +27,10 @@ cd ~/marsi-companion
       and readable Pi/server readings. Missing sensors show `--`.
 - [ ] Type `Hello Marsi. Explain what a Raspberry Pi does in two sentences.`
       Receive a useful reply from Qwen.
+- [ ] Ask an arithmetic question, a technical question and a friendly everyday
+      question. Each answer should address its specific question, with restrained
+      character flavour and no recycled long paragraph. If this fails, run the
+      [Ubuntu conversation check](ubuntu-server.md#repeated-or-irrelevant-replies).
 - [ ] Type `For this test, my imaginary pet is a blue duck called Cogbert.`
       Then ask `What is my imaginary pet called?` Check recent conversation.
 - [ ] With **Voice** off, a typed reply appears without speaker playback.

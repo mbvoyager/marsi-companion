@@ -42,6 +42,18 @@ For speech, run from `~/marsi-companion`:
 If a check fails, preserve the complete traceback. See
 [speech diagnostics and the PyAV compatibility fix](ubuntu-server.md#speech-recognition-fails-after-the-microphone-test-passes).
 
+For repetitive or irrelevant conversation, run **on Ubuntu**:
+
+```bash
+cd ~/marsi-companion
+.venv-server/bin/python -m marsi_local.conversation --check
+```
+
+This prints real Qwen responses to synthetic prompts using a temporary journal;
+your normal archive and notes stay intact. Review relevance as well as the
+repetition check. See [conversation diagnosis](ubuntu-server.md#repeated-or-irrelevant-replies)
+for updating the server and checking its configured model.
+
 To enable Ubuntu SSH from its local console:
 
 ```bash

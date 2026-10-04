@@ -229,6 +229,53 @@ Official speech instructions:
 [Whisper CPU configuration](https://github.com/SYSTRAN/faster-whisper) and
 [Piper Python API and voice downloads](https://github.com/OHF-Voice/piper1-gpl/blob/main/docs/API_PYTHON.md).
 
+## Repeated or irrelevant replies
+
+If Marsi repeats long stock paragraphs or evades harmless questions, update
+the **Ubuntu server**, where the persona, conversation context and generation
+settings run. Run as the user who installed Marsi:
+
+```bash
+cd ~/marsi-companion
+git pull --ff-only
+systemctl --user restart marsi-server
+systemctl --user status marsi-server --no-pager
+```
+
+This update preserves `.env.server`, models, the conversation journal and notes.
+It filters repetitive examples out of Qwen's working prompt without deleting
+their original journal entries, gives ordinary questions priority, and limits
+lore to relevant topics. The Pi does not need updating for this server-side fix.
+
+Then, while not requesting a conversation from the Pi, run:
+
+```bash
+.venv-server/bin/python -m marsi_local.conversation --check
+```
+
+This contacts the installed Qwen through the configured Ollama URL. It starts
+with synthetic repetitive history, then asks three different questions:
+arithmetic, a network explanation and a kind response to a completed task.
+It prints the actual answers and elapsed time. A first cold request can be
+slower. It uses a temporary test database, removes it afterwards, and does not
+read or modify your normal journal, notes or recordings. No speech engines or
+Pi audio are involved.
+
+`[CHECK COMPLETE]` means inference finished without a detected long repetition.
+Read each answer to judge whether it actually fits the question; this check
+cannot grade conversational quality. If it fails or the replies are still
+irrelevant, keep the output and check the installed model and Ollama version:
+
+```bash
+ollama --version
+grep '^MARSI_MODEL=' .env.server
+```
+
+The second command displays the model setting only. Keep the full settings file,
+which includes the token, private. A small model can still make mistakes even
+when the software works; compare different topics before changing hardware or
+switching to a larger model.
+
 ## Speech recognition fails after the microphone test passes
 
 ### PyAV decoder compatibility

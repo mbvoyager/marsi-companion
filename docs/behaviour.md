@@ -29,9 +29,10 @@ and the caption names the readings used. `art` makes another composition now.
 
 The local [lore library](../marsi_local/lore.json) contains over 100 short
 reference entries across Mechanicus, Imperial, Chaos and alien subjects, with
-official source links. Core setting facts accompany every Qwen conversation;
-up to three topic records are selected by English/German aliases and recent
-context, within 2,800 characters. Whole newest exchanges use the remaining
+official source links. Setting facts accompany a relevant lore question or
+a pronoun-based follow-up; ordinary questions receive no default creed.
+Up to three topic records are selected by English/German aliases, within
+2,800 characters. Whole newest exchanges use the remaining
 prompt budget. This is local retrieval, not training, live browsing or an
 exhaustive encyclopaedia. The 10,500-byte prompt allowance is a heuristic for
 the model's 4,096-token context, not an exact tokenizer; long prompts and
@@ -39,6 +40,25 @@ token-heavy languages can still exceed it.
 Optional notes and older recalled messages are also bounded to 1,600 and 800
 UTF-8 bytes respectively, preserving complete values and favouring newer ones.
 Their full saved versions remain in the database.
+
+The persona prioritizes a direct answer, then a little character flavour. Human
+daily life, feelings and ordinary questions are welcome. The machine faith
+should not make Marsi dismiss harmless topics or turn each reply into a sermon.
+Long repeated passages are excluded from the next working prompt, while the
+human's earlier messages remain available as bounded reference data. The
+original journal entries are preserved. If a newly generated answer repeats a
+long passage, the server tries once more with that example removed, using the
+remaining inference time budget. A persistent loop produces an explicit error
+and is not saved as another successful conversation.
+
+Generation uses Qwen3's recommended non-thinking sampling (temperature 0.7,
+top-p 0.8, top-k 20, min-p 0), plus modest presence/repetition penalties. These
+can reduce looping; they do not guarantee relevance, factual accuracy or varied
+conversation. See [Qwen's model guidance](https://huggingface.co/Qwen/Qwen3-1.7B)
+and [Ollama's options](https://docs.ollama.com/modelfile).
+The presence penalty is 0.5 rather than Qwen's stronger 1.5 suggestion for severe
+repetition; high penalties can also degrade language quality. Test the actual
+model with [the Ubuntu conversation check](ubuntu-server.md#repeated-or-irrelevant-replies).
 
 Restart the server after changing persona or lore. Restart the Pi display for
 artwork changes. All machine readings are actual supplied numbers or unknown;

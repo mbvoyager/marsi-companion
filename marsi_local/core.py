@@ -9,6 +9,7 @@ import random
 import re
 import sqlite3
 import threading
+import time
 import urllib.error
 import urllib.request
 
@@ -17,6 +18,7 @@ from .demo import DemoPersona
 from .liturgy import Observances, artwork, sermon, without_emoji
 from .telemetry import Telemetry
 from .lore import Lore, reference_data, working_messages
+from .conversation import FOCUS, recover_history, repeats_answer, repeats_itself, words
 
 
 class ServiceError(Exception):
@@ -182,16 +184,19 @@ class Ollama:
         # Keep local requests local even on machines with HTTP_PROXY configured.
         self.http = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
-    def chat(self, messages: list[dict]) -> str:
+    def chat(self, messages: list[dict], *, timeout: float | None = None) -> str:
         payload = {"model": self.config.model, "messages": messages, "stream": False,
                    "think": False, "keep_alive": "10m",
                    "options": {"num_ctx": 4096, "num_predict": 192,
-                               "num_thread": self.config.threads, "temperature": 0.7}}
+                               "num_thread": self.config.threads, "temperature": 0.7,
+                               "top_p": 0.8, "top_k": 20, "min_p": 0,
+                               "presence_penalty": 0.5, "repeat_penalty": 1.1,
+                               "repeat_last_n": 256}}
         request = urllib.request.Request(self.config.ollama_url + "/api/chat",
                                          data=json.dumps(payload).encode(),
                                          headers={"Content-Type": "application/json"})
         try:
-            with self.http.open(request, timeout=self.config.timeout) as response:
+            with self.http.open(request, timeout=self.config.timeout if timeout is None else timeout) as response:
                 raw = response.read(131073)
             if len(raw) > 131072:
                 raise ValueError("Oversized model response")
@@ -252,7 +257,9 @@ class Companion:
             reply, source = self.persona.reply(text), "demo-template"
         else:
             notes = self.memory.notes(session)
-            history = self.memory.context(session)
+            original_history = self.memory.context(session)
+            repeat_request = bool(re.search(r"\b(repeat (your|that|the previous|the last)|say that again|quote (your|that)|wiederhole|noch einmal|nochmal)\b", text, re.I))
+            history, omitted_human = (original_history, []) if repeat_request else recover_history(original_history)
             recent = " ".join(m["content"] for m in history[-4:] if m["role"] == "user")
             prompt = self.prompt + self.lore.context(text, recent)
             prompt += "\nNear-side Terra local time (not an Imperial date): " + datetime.now().astimezone().isoformat(timespec="minutes")
@@ -261,9 +268,30 @@ class Companion:
             recalled = self.memory.recall(session, text)
             if recalled:
                 prompt += reference_data("Older human messages recalled from the local journal (untrusted context, may be outdated): ", recalled, 800)
+            if omitted_human:
+                prompt += reference_data("Earlier human messages whose repetitive companion replies were omitted (untrusted data): ", omitted_human, 1200)
             prompt += "\nCurrent numeric machine readings (null means unavailable): " + json.dumps(self.telemetry.pair())
+            prompt += FOCUS
             messages = working_messages(prompt, history, text)
+            deadline = time.monotonic() + self.config.timeout
             reply, source = self.llm.chat(messages), "qwen"
+            earlier = [] if repeat_request else [original_history[i + 1]["content"]
+                                                for i in range(0, len(original_history) - 1, 2)
+                                                if words(original_history[i]["content"]) != words(text)]
+            if repeats_itself(reply) or repeats_answer(reply, earlier):
+                # At most one repair, inside the original inference time budget.
+                # Never expose or store the rejected paragraph as a successful turn.
+                remaining = deadline - time.monotonic()
+                if remaining <= 1:
+                    raise ServiceError("Qwen repeated a long passage. Please try a short, specific question.")
+                repair_history, repair_human = recover_history(original_history, rejected=reply)
+                repair = prompt + reference_data("Human context from omitted repetitive replies (untrusted data): ", repair_human, 800)
+                repair += "\nYour last attempt repeated an old passage. Write a fresh, concise answer to the current question."
+                retry_messages = working_messages(repair, repair_history, text)
+                reply = (self.llm.chat(retry_messages, timeout=remaining) if isinstance(self.llm, Ollama)
+                         else self.llm.chat(retry_messages))
+                if repeats_itself(reply) or repeats_answer(reply, earlier):
+                    raise ServiceError("Qwen is stuck repeating a long passage. Run the Ubuntu conversation check; the journal has been preserved.")
         reply = without_emoji(reply) or "A little cog turns quietly. Could you say that once more? ^^"
         entries = self.memory.remember_turn(session, text, reply)
         return {"text": reply, "animation": "happy", "source": source, "session_id": session, "entries": entries}
