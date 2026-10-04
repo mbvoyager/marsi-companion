@@ -83,7 +83,9 @@ conversation, then speech, then the little body.
 1. **[Start here — how the pieces fit together](docs/start-here.md)**
 2. **[Ubuntu server setup — Git, Qwen, speech and startup](docs/ubuntu-server.md)**
 3. **[Raspberry Pi setup — display, microphone and speaker](docs/raspberry-pi.md)**
-4. **[The Forgekeeper's Ledger — development and handoff](docs/development.md)**
+4. **[The Wireless Vox — Bluetooth audio on the little body](docs/bluetooth-audio.md)**
+5. **[The Trials of Awakening — test the existing features](docs/test-checklist.md)**
+6. **[The Forgekeeper's Ledger — development and handoff](docs/development.md)**
 
 To retrieve the archive after installing Git:
 

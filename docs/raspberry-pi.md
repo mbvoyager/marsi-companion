@@ -88,6 +88,12 @@ the microphone. Replies can be scrolled in the text area, even on a 480×320 scr
 
 ## 3. Test the microphone and speaker
 
+For a **Bluetooth receiver or headset**, follow the
+[Bluetooth audio guide](bluetooth-audio.md) first. Lite needs audio services to
+bridge Bluetooth to Marsi's recording and playback. A receiver may support
+speaker output without exposing a microphone; test those separately. Return
+here once the local playback and, if available, recording tests succeed.
+
 Attach a microphone and speaker/headphones. The Pi 3 B+ has no built-in microphone.
 A USB microphone or USB sound card is a straightforward starting point.
 
@@ -115,6 +121,9 @@ does not record in idle mode or during playback, which avoids most echo loops.
 
 The recognizer can still mishear speech or noise. Start in a quiet room. A wake
 word and continuous listening are later additions after this flow is reliable.
+
+Use the [feature test checklist](test-checklist.md) to work through conversation,
+speech, notes, rituals, connection recovery and startup on your actual hardware.
 
 ## 4. Tiny rituals and startup
 
