@@ -49,8 +49,11 @@ a small database file for conversation history and notes.
    useful Qwen response before adding speech or the Pi.
 2. **Server speech.** Download the small recognizer and a Piper voice; validate
    them once while internet access is available.
-3. **Pi display and typed chat.** Follow [Pi setup](raspberry-pi.md). Confirm the
-   address and shared token, then type a message.
+3. **Prepare Ubuntu, then set up the Pi.** Prepare the server's network listener in step 5 of
+   [Ubuntu setup](ubuntu-server.md), then switch to [Pi setup](raspberry-pi.md).
+   Install its OS and interface, set the server address and shared token, and
+   verify typed chat and the display. The two guides cover successive parts
+   of the setup; finish the Pi tests before enabling automatic startup.
 4. **Push-to-talk.** Verify the microphone and speaker. Press Talk, speak, and
    press Finish. There is a 15-second recording limit.
 5. **Leave the forge running.** Enable the Ubuntu user service and, after audio

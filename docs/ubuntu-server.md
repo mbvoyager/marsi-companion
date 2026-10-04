@@ -10,7 +10,7 @@ Run these commands in a terminal on Ubuntu:
 
 ```bash
 sudo apt update
-sudo apt install -y git curl python3 python3-venv
+sudo apt install -y git curl nano python3 python3-venv
 cd ~
 git clone https://github.com/mbvoyager/marsi-companion.git
 cd marsi-companion
@@ -18,12 +18,28 @@ bash scripts/setup-server.sh --text-only
 ```
 
 The install command includes **Git**, which downloads the project and lets you
-update its code later. It also installs curl, Python, and Python's virtual
-environment support. Installing Ubuntu alone does not guarantee Git is installed.
+update its code later. It also installs curl, the nano text editor, Python, and
+Python's virtual environment support. Installing Ubuntu alone does not guarantee
+Git is installed.
 
 The setup script creates a private Python environment, `.venv-server`, and
 `.env.server` with a newly generated shared token. It preserves an existing
 settings file. The text server has no third-party Python dependencies.
+
+The setup script creates your server settings locally in
+**`~/marsi-companion/.env.server`**. This file is excluded from Git because it
+contains your local settings and shared token. The leading
+dot makes it a hidden file, so a normal `ls` command will not show it. To list
+the project including hidden files, or open the settings:
+
+```bash
+ls -la ~/marsi-companion
+nano ~/marsi-companion/.env.server
+```
+
+In nano, Ctrl+O followed by Enter saves changes; Ctrl+X exits. If the file is
+missing, run `bash scripts/setup-server.sh --text-only` from the project directory.
+The script creates it and preserves a settings file that already exists.
 
 This is the companion's separate repository, using its `main` branch. If you
 already cloned `tiny-tech-priest-marsi`, leave that folder in place and clone
@@ -100,21 +116,50 @@ blank for automatic detection.
 The speech models are initialized lazily in the server, so the first spoken
 request after a restart may be slower even when their files are already cached.
 
-## 5. Let the Pi connect
+## 5. Prepare the server and set up the Raspberry Pi
+
+This is the handoff from Ubuntu to the Pi. You have now prepared the conversation
+and speech engines. First make the server reachable below, then install and
+configure the Pi using its separate guide. Test the Pi before proceeding to
+automatic startup in step 6. You can install Raspberry Pi OS earlier, but the Pi's
+conversation test needs the Ubuntu server to be running.
+
+### Prepare Ubuntu
 
 Find the server's LAN address with `hostname -I`. Reserve that address in the
-router if possible, so the Pi's settings stay valid. Start Marsi with:
+router if possible, so the Pi's settings stay valid. Keep a note of the address
+and open `~/marsi-companion/.env.server` to find the `MARSI_TOKEN` value.
+You will put these two values into the Pi's settings after its setup script runs.
+
+If Marsi is still running from an earlier test, stop that copy with Ctrl+C.
+Start Marsi from the project directory with:
 
 ```bash
+cd ~/marsi-companion
 .venv-server/bin/python -m marsi_local.server --host 0.0.0.0
 ```
 
-Copy `MARSI_TOKEN` from `.env.server` to the Pi's `.env.pi` and set the Pi's
-`MARSI_SERVER_URL` to `http://YOUR_SERVER_IP:8765`.
+Leave this terminal open while you set up and test the Pi. The address
+`0.0.0.0` tells Marsi to accept connections through the server's network
+interfaces; the Pi's settings must use the server's actual LAN address.
+
+### Set up the Raspberry Pi
+
+Now follow the **[Raspberry Pi setup guide](raspberry-pi.md)**. Install Raspberry
+Pi OS if you have not already done so, then complete the interface installation
+in its step 1. That setup script creates **`~/marsi-companion/.env.pi` on the Pi**.
+
+In the Pi's settings, copy the server's `MARSI_TOKEN` value and set
+`MARSI_SERVER_URL` to `http://YOUR_SERVER_IP:8765`. The Pi guide shows exactly
+where to edit those fields and how to test typed chat, the display, and speech.
+
+### Allow the connection if a firewall is enabled
 
 This starter API uses ordinary HTTP and is intended for your trusted home LAN.
-Keep port 8765 off the public internet. If a firewall is enabled, allow the Pi's
-address only, for example:
+Keep port 8765 off the public internet. Once the Pi is on your network, find its
+address by running `hostname -I` **on the Pi**. If Ubuntu's firewall is enabled,
+allow that address before the Pi's conversation test. Run this in a second
+terminal **on Ubuntu**, for example:
 
 ```bash
 sudo ufw allow from YOUR_PI_IP to any port 8765 proto tcp
@@ -123,8 +168,12 @@ sudo ufw allow from YOUR_PI_IP to any port 8765 proto tcp
 Replace the placeholder before running that command. Do not enable a firewall
 from a remote session until its SSH rule is configured.
 
+Continue with the typed conversation, display, and microphone/speaker checks
+in the Pi guide. Return here for step 6 once those tests work.
+
 ## 6. Start the server automatically
 
+Do this after the Pi can talk to the manually started server.
 These commands assume the checkout is `~/marsi-companion`:
 
 ```bash

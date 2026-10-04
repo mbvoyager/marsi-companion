@@ -9,27 +9,51 @@ Use Raspberry Pi Imager to configure your username, Wi-Fi, and SSH while writing
 the card. The display's connection type may need its manufacturer's setup; an
 HDMI display is the simplest initial test. Custom firmware is unnecessary.
 
+Before testing a conversation from the Pi, complete steps 1–4 of the
+**[Ubuntu server guide](ubuntu-server.md)** and its server preparation in step 5.
+Leave Marsi running on Ubuntu with `--host 0.0.0.0`, and have the server's LAN
+address and `MARSI_TOKEN` ready. You can install the Pi's operating system and
+interface before that, but the connection test needs the server to be ready.
+
 ## 1. Install the interface
 
 On the Pi, through SSH or its console:
 
 ```bash
 sudo apt update
-sudo apt install -y git python3 python3-venv python3-tk libportaudio2 alsa-utils
+sudo apt install -y git nano python3 python3-venv python3-tk libportaudio2 alsa-utils
 # For Lite only: add a small graphical session.
 sudo apt install -y xserver-xorg xinit openbox
 cd ~
 git clone https://github.com/mbvoyager/marsi-companion.git
 cd marsi-companion
 bash scripts/setup-pi.sh
-nano .env.pi
 ```
 
-Set `MARSI_SERVER_URL` to the Ubuntu machine's LAN address and copy its
-`MARSI_TOKEN` into the Pi settings. Both devices must be on a reachable LAN.
 The Pi installs only a small microphone library; all model inference stays on Ubuntu.
 Git is included in the package installation above so the Pi can download and
 update its copy of the project.
+
+The setup script creates **`~/marsi-companion/.env.pi` on the Pi**. This is a
+hidden file because its name starts with a dot. Open it on the Pi:
+
+```bash
+nano ~/marsi-companion/.env.pi
+```
+
+Set `MARSI_SERVER_URL` to the Ubuntu machine's actual LAN address and copy the
+`MARSI_TOKEN` value from **`~/marsi-companion/.env.server` on Ubuntu**. Replace
+the existing values in these two fields; keep the other settings:
+
+```text
+MARSI_SERVER_URL=http://YOUR_SERVER_IP:8765
+MARSI_TOKEN=THE_TOKEN_FROM_UBUNTU
+```
+
+Use the real address and token in place of the placeholders. In nano, Ctrl+O
+followed by Enter saves; Ctrl+X exits. Both devices must be on a reachable LAN.
+If Ubuntu's firewall is enabled, allow the Pi's address as described in step 5
+of the Ubuntu guide before testing the connection.
 
 First verify the connection without a display:
 
