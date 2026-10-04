@@ -45,6 +45,9 @@ class ServerConfig:
     threads: int = 3
     timeout: float = 180.0
     demo: bool = False
+    observances: bool = True
+    schedule_session: str = "pi"
+    morning_hour: int = 7
 
     @classmethod
     def from_env(cls, demo: bool = False) -> ServerConfig:
@@ -60,9 +63,14 @@ class ServerConfig:
             threads=int(os.getenv("MARSI_CPU_THREADS", "3")),
             timeout=float(os.getenv("MARSI_TIMEOUT", "180")),
             demo=demo,
+            observances=os.getenv("MARSI_OBSERVANCES", "true").lower() == "true",
+            schedule_session=os.getenv("MARSI_COMPANION_SESSION", "pi"),
+            morning_hour=int(os.getenv("MARSI_MORNING_HOUR", "7")),
         )
         if not 1 <= config.threads <= 64 or not 1 <= config.timeout <= 600:
             raise ValueError("CPU threads must be 1..64 and timeout must be 1..600 seconds")
+        if not 0 <= config.morning_hour <= 23 or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", config.schedule_session):
+            raise ValueError("Morning hour must be 0..23 and companion session must be a valid session name")
         return config
 
 

@@ -2,7 +2,7 @@
 
 We are building a local character companion around an existing Qwen model.
 We do not need to train a new LLM. Marsi's character comes from a written persona,
-conversation context, a small memory store, and his display's behaviour.
+conversation context, a local journal, retrieved context and his display's behaviour.
 He can feel lively and familiar without being conscious.
 
 This is Marsi's standalone companion repository. The script-based Marsi bot
@@ -57,26 +57,33 @@ a small database file for conversation history and notes.
 4. **Push-to-talk.** Verify the microphone and speaker. Press Talk, speak, and
    press Finish. There is a 15-second recording limit.
 5. **Leave the forge running.** Enable the Ubuntu user service and, after audio
-   works, optionally start the Pi display at boot.
+   works, enable the Pi display at boot using the supplied startup installer.
+   [Quickstart](quickstart.md) collects everyday launch/update instructions.
 
 Marsi performs a small visual ritual every 10–20 minutes when idle. Rituals are
 silent by default, skip 22:00–08:00 in the Pi's local time, and defer while you
-are interacting. They use short authored lines, so they do not wake Qwen or
-depend on the network. Restarting the Pi starts a fresh ritual countdown.
+are interacting. They use short authored lines and do not wake Qwen. They are
+archived through the server, so the server connection is needed. Restarting the
+Pi starts a fresh small-ritual countdown. Ubuntu separately maintains persistent
+daily artwork, sermons every 2–3 days and a 07:00 greeting using local date and
+machine readings. [Behaviour and memory](behaviour.md) explains all schedules.
 
 ## What this prototype includes
 
 - Qwen conversation through Ollama with short responses and thinking disabled.
 - Optional CPU-only Whisper and Piper, loaded on first use and reused.
-- Persistent recent conversation and explicit notes, with a Forget operation.
-- A lightweight animated red-robed tech-priest, typing, and push-to-talk.
+- A lasting conversation journal, explicit notes and retrieval of older context.
+- A black/red/green terminal archive, corner ASCII figure, typing and F8 push-to-talk.
+- Numeric Pi/server hardware readings, machine-shaped ASCII artwork and scheduled observances.
+- Local `art`, `sermon`, `exit` and memory commands, with a Forget operation.
 - A shared token for LAN access; one inference/speech task at a time.
 - Setup scripts, a server startup service, and automated regression tests.
 
 The starter does not yet include a wake word, continuous listening, self-editing
-code, device control, image generation, or knowledge search. Qwen can help describe
-chibi scenes and write art prompts. Actual generated artwork belongs in a later,
-optional image pipeline, likely on better hardware or an explicitly chosen service.
+code, device control, raster image generation, weather or news feeds. Current art
+is procedural ASCII and runs on this hardware. Qwen can also help describe chibi
+scenes and write image prompts. A raster image pipeline would be a separate later
+component, likely on better hardware or an explicitly chosen service.
 
 ## Develop from either machine
 

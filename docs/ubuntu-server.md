@@ -22,6 +22,11 @@ update its code later. It also installs curl, the nano text editor, Python, and
 Python's virtual environment support. Installing Ubuntu alone does not guarantee
 Git is installed.
 
+For SSH installation and process checks, see the
+[troubleshooting command guide](troubleshooting.md#ubuntu-service-and-models).
+Once both machines are installed, [quickstart](quickstart.md) gives the short
+update, restart and Pi automatic-start sequence.
+
 The setup script creates a private Python environment, `.venv-server`, and
 `.env.server` with a newly generated shared token. It preserves an existing
 settings file. The text server has no third-party Python dependencies.
@@ -200,6 +205,13 @@ systemctl --user stop marsi-server
 ```
 
 Ollama also needs its own service running. Inspect it with `systemctl status ollama`.
+
+The running Marsi service also creates daily ASCII art, sermons every 2–3 days
+and a morning entry at 07:00. Schedules and the conversation journal stay in the
+private SQLite database across restarts. Set Ubuntu's timezone correctly with
+`timedatectl`; the morning uses this clock. The scheduled session defaults to
+`pi`, matching the Pi settings. See [behaviour and memory](behaviour.md) for
+configuration, retrieval-based continuity and how the Pi speaks the morning entry.
 
 ## Useful checks
 

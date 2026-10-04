@@ -1,19 +1,170 @@
-"""Optional: run under Xvfb on Linux to check real Tk widgets and animation."""
+"""Exercise real Tk widgets without audio devices or a network connection."""
+from datetime import datetime
+import os
+from pathlib import Path
+import tempfile
+import time
 import tkinter as tk
-from marsi_local.client import Client
+from tkinter import font as tkfont
+from unittest.mock import Mock, patch
+
+from marsi_local.liturgy import BLACK, GREEN, RED, artwork
 from marsi_local.pi import Display
 
-root = tk.Tk()
-display = Display(root, Client("http://127.0.0.1:8765"), windowed=True)
-for width, height in ((800, 480), (480, 320)):
-    root.geometry(f"{width}x{height}")
-    root.update()
-    for mode in ("idle", "listening", "thinking", "speaking"):
-        display.mode = mode
-        display.draw(123.4)
-        root.update()
-        assert display.canvas.find_all(), "The character should be visible"
-        assert display.reply.winfo_height() > 20, "Reply area must fit on screen"
-        assert display.talk.winfo_viewable(), "Talk control must be visible"
-display.close()
-print("Pi display smoke test passed at 800x480 and 480x320.")
+
+class PreviewClient:
+    session = "display-test"
+
+    def __init__(self):
+        self.chat = Mock(return_value={"text": "A kind little cog. ^^", "source": "system"})
+        self.art = Mock(return_value=artwork({"server": {"load1": 0.42, "temperature_c": 43.0}}, "preview"))
+        self.sermon = self.ritual = self.art
+
+    def telemetry(self, readings):
+        return {"pi": readings, "server": None}
+
+    def journal(self, **kwargs):
+        return {"entries": [], "has_more": False}
+
+
+def render_windows(root, destination):
+    """Render this off-screen test window alone; never capture the desktop."""
+    import ctypes
+    from ctypes import wintypes
+    from PIL import Image, ImageDraw, ImageFont
+    user, gdi = ctypes.windll.user32, ctypes.windll.gdi32
+    user.GetDC.argtypes, user.GetDC.restype = [wintypes.HWND], wintypes.HDC
+    user.ReleaseDC.argtypes = [wintypes.HWND, wintypes.HDC]
+    user.PrintWindow.argtypes = [wintypes.HWND, wintypes.HDC, wintypes.UINT]
+    gdi.CreateCompatibleDC.argtypes, gdi.CreateCompatibleDC.restype = [wintypes.HDC], wintypes.HDC
+    gdi.CreateCompatibleBitmap.argtypes, gdi.CreateCompatibleBitmap.restype = [wintypes.HDC, ctypes.c_int, ctypes.c_int], wintypes.HANDLE
+    gdi.SelectObject.argtypes, gdi.SelectObject.restype = [wintypes.HDC, wintypes.HANDLE], wintypes.HANDLE
+    gdi.GetBitmapBits.argtypes = [wintypes.HANDLE, ctypes.c_long, ctypes.c_void_p]
+    gdi.DeleteObject.argtypes = [wintypes.HANDLE]
+    gdi.DeleteDC.argtypes = [wintypes.HDC]
+    handle = root.winfo_id()
+    width, height = root.winfo_width(), root.winfo_height()
+    dc = user.GetDC(handle)
+    memory = gdi.CreateCompatibleDC(dc)
+    bitmap = gdi.CreateCompatibleBitmap(dc, width, height)
+    old = gdi.SelectObject(memory, bitmap)
+    try:
+        assert user.PrintWindow(handle, memory, 1), "Could not render test window"
+        buffer = ctypes.create_string_buffer(width * height * 4)
+        assert gdi.GetBitmapBits(bitmap, len(buffer), buffer), "Could not read test rendering"
+        image = Image.frombytes("RGB", (width, height), buffer.raw, "raw", "BGRX", 0, 1)
+        # Off-screen Tk Text/Canvas do not implement WM_PRINTCLIENT on Windows.
+        # Render their real laid-out glyphs/items into the window preview.
+        def visit(widget):
+            if isinstance(widget, (tk.Text, tk.Canvas)):
+                layer = Image.new("RGB", (widget.winfo_width(), widget.winfo_height()), widget.cget("bg"))
+                draw = ImageDraw.Draw(layer)
+                def font(spec):
+                    actual = tkfont.Font(font=spec).actual()
+                    pixels = round(root.winfo_fpixels(f"{actual['size']}p"))
+                    return ImageFont.truetype("C:/Windows/Fonts/cour.ttf", max(6, pixels))
+                if isinstance(widget, tk.Text):
+                    face = font(widget.cget("font"))
+                    index = "1.0"
+                    while widget.compare(index, "<", "end-1c"):
+                        box = widget.bbox(index)
+                        character = widget.get(index)
+                        if box and character not in "\n\t":
+                            tags = widget.tag_names(index)
+                            color = GREEN if "human" in tags or "system" in tags else RED
+                            draw.text(box[:2], character, fill=color, font=face)
+                        index = widget.index(index + "+1c")
+                else:
+                    for item in widget.find_all():
+                        coords = widget.coords(item)
+                        color = widget.itemcget(item, "fill")
+                        if widget.type(item) == "rectangle":
+                            draw.rectangle(coords, fill=color)
+                        elif widget.type(item) == "text":
+                            bounds = widget.bbox(item)
+                            face = font(widget.itemcget(item, "font"))
+                            draw.multiline_text(bounds[:2], widget.itemcget(item, "text"), fill=color, font=face, spacing=0)
+                image.paste(layer, (widget.winfo_rootx() - root.winfo_rootx(), widget.winfo_rooty() - root.winfo_rooty()))
+            for child in widget.winfo_children():
+                visit(child)
+        visit(root)
+        image.save(destination)
+    finally:
+        gdi.SelectObject(memory, old)
+        gdi.DeleteObject(bitmap)
+        gdi.DeleteDC(memory)
+        user.ReleaseDC(handle, dc)
+
+
+with tempfile.TemporaryDirectory() as state:
+    with patch.dict(os.environ, {"MARSI_PI_STATE_DIR": state}):
+        root = tk.Tk()
+        root.withdraw()
+        client = PreviewClient()
+        display = Display(root, client, windowed=True)
+        root.geometry("800x480-20000+0")
+        root.deiconify()
+        readings = {"cpu_percent": 12, "load1": 0.42, "ram_used_mb": 220, "ram_total_mb": 920,
+                    "temperature_c": 43, "disk_used_percent": 21, "cpu_count": 4}
+        display.readings = {"pi": readings, "server": dict(readings, ram_total_mb=7800, ram_used_mb=2100)}
+        now = datetime.now().astimezone().isoformat()
+        display.receive_entries([
+            {"id": 1, "at": now, "kind": "chat", "role": "human", "text": "Good morning, little priest."},
+            {"id": 2, "at": now, "kind": "chat", "role": "marsi", "text": "May your first little step be kind to you. I kept a cog for your pocket. ^^"},
+            {"id": 3, "at": now, "kind": "art", "role": "marsi", "text": client.art()["text"]},
+        ], initial=True)
+        display.polling = True
+        for width, height in ((800, 480), (480, 320)):
+            root.geometry(f"{width}x{height}-20000+0")
+            root.update()
+            display.status.set("[PREVIEW] Sample data / ARCHIVUM MARTIS / F8 = TALK")
+            for mode in ("idle", "listening", "thinking", "speaking"):
+                display.mode = mode
+                display.draw(123.4)
+                root.update()
+                assert display.canvas.find_all(), "ASCII character should be visible"
+                assert display.reply.winfo_height() > 100, "Archive must remain useful"
+                assert display.talk.winfo_viewable(), "Talk must be visible"
+                assert display.meter_label.winfo_rooty() + display.meter_label.winfo_height() <= root.winfo_rooty() + height - 40, "Readings should fit above controls"
+                assert display.talk.winfo_rootx() + display.talk.winfo_width() <= root.winfo_rootx() + width, "Talk must fit horizontally"
+                font = tkfont.Font(font=display.reply.cget("font"))
+                assert font.measure("+" + "=" * 38 + "+") < display.reply.winfo_width() - 16, "ASCII art should not wrap"
+                assert display.reply.cget("bg") == BLACK
+                assert display.reply.tag_cget("human", "foreground") == GREEN
+                assert display.reply.tag_cget("marsi", "foreground") == RED
+            render_dir = os.getenv("MARSI_RENDER_DIR")
+            if render_dir and os.name == "nt":
+                destination = Path(render_dir)
+                destination.mkdir(parents=True, exist_ok=True)
+                render_windows(root, destination / f"terminal-{width}x{height}.png")
+        display.show_text("One archived line.")
+        display.show_text("Another archived line.")
+        assert "One archived line." in display.reply.get("1.0", "end")
+        display.receive_entries([{"id": 4, "at": now, "kind": "sermon", "role": "marsi",
+                                  "text": "A manual little sermon.", "spoken_text": "A manual little sermon.", "scheduled": 0}])
+        assert display.pending_spoken is None, "Manual sermons must not be automatically replayed"
+        client.art.reset_mock()
+        display.start_task = Mock()
+        display.input.insert(0, "art")
+        display.send_text()
+        display.start_task.call_args.args[0]()
+        client.art.assert_called_once()
+        client.chat.assert_not_called()
+        display.start_task.reset_mock()
+        display.input.insert(0, "Tell me about art")
+        display.send_text()
+        display.start_task.call_args.args[0]()
+        client.chat.assert_called_once()
+        with patch.object(display, "toggle_record") as toggle:
+            display.hotkey(None)
+            display.hotkey(None)
+            toggle.assert_called_once()
+            display.release_hotkey(None)
+            time.sleep(0.05)
+            root.update()
+            display.hotkey(None)
+            assert toggle.call_count == 2
+        display.input.insert(0, "exit")
+        display.send_text()
+        assert display.closed, "Exit must close locally"
+print("Pi archive display passed at 800x480 and 480x320, including commands and F8.")

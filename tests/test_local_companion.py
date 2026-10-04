@@ -92,13 +92,14 @@ class MemoryTests(unittest.TestCase):
         self.assertTrue(self.memory.context("other"))
         self.assertEqual(self.memory.notes("other"), ["Likes cogs"])
 
-    def test_session_limit_removes_old_histories_and_notes(self):
+    def test_session_limit_bounds_working_context_but_preserves_archive_and_notes(self):
         for number in range(101):
             session = f"session{number}"
             self.memory.remember_turn(session, "Hi", "Hello")
             self.memory.add_note(session, "A cog")
         self.assertEqual(self.memory.context("session0"), [])
-        self.assertEqual(self.memory.notes("session0"), [])
+        self.assertEqual(self.memory.notes("session0"), ["A cog"])
+        self.assertEqual(len(self.memory.journal("session0")["entries"]), 2)
         with self.memory.connect() as db:
             self.assertEqual(db.execute("SELECT COUNT(*) FROM sessions").fetchone()[0], 100)
 

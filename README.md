@@ -3,7 +3,7 @@
 ```text
         +---------------------------------------------------+
         |           A R C H I V U M   M A R T I S           |
-        |    LOCAL COMPANION // POCKET FORGE // SEAL 003    |
+        |    LOCAL COMPANION // POCKET FORGE // SEAL 004    |
         +---------------------------------------------------+
                         .--.  .--.
                    _.-==|  |==|  |==-._
@@ -24,9 +24,9 @@
 ```
 
 **A local AI companion in an oversized red hood.** Qwen runs on an Ubuntu
-cogitator; a Raspberry Pi gives Marsi his animated face, microphone and voice.
-Conversation, remembered notes, and small cheerful rituals belong to your own
-little forge.
+cogitator; a Raspberry Pi bears his ASCII effigy, microphone and voice.
+Black glass. Mars-red inscriptions. Green phosphor. Conversation, a lasting
+private journal and little acts of kindness within the solemn machine archive.
 
 > **ARCHIVE DECREE // READ BEFORE IGNITION**
 >
@@ -43,7 +43,8 @@ the brass duck. The duck outranks him. This is recorded in the archive.
 He is a **companion**: someone to talk with, learn alongside, and share a small
 moment of delight with. His fictional character lives in
 [the personality scroll](marsi_local/personality.txt); his continuity comes from
-local conversation history and notes you choose to save.
+local conversation history, recalled context and notes you choose to save.
+No emoji pass the outer seal: his smallest smiles are `^^`, `:D` and `:P`.
 
 ## Seal II · The Distributed Forge
 
@@ -68,8 +69,9 @@ local conversation history and notes you choose to save.
 | The Cogitator | Ollama runs Qwen3 1.7B on the CPU | Ubuntu server |
 | The Listening Choir | Whisper tiny turns recordings into text | Ubuntu server |
 | The Vox Reliquary | Piper gives replies a spoken voice | Ubuntu server |
-| The Memory Dataslate | SQLite stores recent conversation and explicit notes | Ubuntu server |
-| The Little Body | Animated face, push-to-talk, speaker playback | Raspberry Pi |
+| The Memory Dataslate | SQLite preserves the journal, notes and routine calendar | Ubuntu server |
+| The Little Body | Corner ASCII effigy, terminal journal, F8 vox, machine readings | Raspberry Pi |
+| The Electoo Loom | Original hardware-shaped ASCII art, sermons and first-light greeting | Ubuntu server |
 
 The first forge is an **i5-4460 with 8 GB RAM** and a **Pi 3 B+ with 1 GB RAM**.
 The Pi carries no neural models. Downloads are needed during installation;
@@ -80,12 +82,16 @@ conversation and speech run locally once their models are available.
 Open these records in order. Keep the first trial small: one successful text
 conversation, then speech, then the little body.
 
+**Already awakened? [Quickstart: updates, opening the display and automatic boot](docs/quickstart.md).**
+
 1. **[Start here — how the pieces fit together](docs/start-here.md)**
 2. **[Ubuntu server setup — Git, Qwen, speech and startup](docs/ubuntu-server.md)**
 3. **[Raspberry Pi setup — display, microphone and speaker](docs/raspberry-pi.md)**
 4. **[The Wireless Vox — Bluetooth audio on the little body](docs/bluetooth-audio.md)**
 5. **[The Trials of Awakening — test the existing features](docs/test-checklist.md)**
 6. **[The Forgekeeper's Ledger — development and handoff](docs/development.md)**
+7. **[The Observance Calendar — appearance, routines and memory](docs/behaviour.md)**
+8. **[The Rite of Diagnosis — useful Ubuntu and Pi commands](docs/troubleshooting.md)**
 
 To retrieve the archive after installing Git:
 
@@ -113,8 +119,12 @@ the conversation engine when you follow the Ubuntu guide and run without `--demo
 
 - **Speak when invited.** Press Talk, say a few words, then Finish. The microphone
   records only during that short interaction.
-- **Keep a little dataslate.** Recent conversation stays on the server. Use
-  `/remember TEXT`, `/notes` and `/forget` in the terminal to tend explicit notes.
+- **Keep the archive.** Conversations return when the display reopens. Older
+  transmissions wait behind the scroll seal. `/remember TEXT` tends explicit notes.
+- **Inscribe the machine.** `art` weaves an ASCII electoo from real readings.
+  One new inscription is offered each day; a tiny sermon follows every 2–3 days.
+- **Greet first light.** Around 07:00 the little priest offers a spoken kindness,
+  the date and machine readings. The vox may sound even during quiet hours.
 - **Bless the idle moment.** Silent rituals appear every 10–20 minutes when idle,
   with quiet hours from 22:00 to 08:00 in the Pi's local time.
 - **Honour the human.** Useful answers, warmth and modest machine-cult humour.
@@ -122,10 +132,10 @@ the conversation engine when you follow the Ubuntu guide and run without `--demo
 
 ## Seal V · The Unfinished Relics
 
-This is a prototype. Actual Qwen speed, speech models and audio devices still
-need verification on the target machines. The display and local API have
-automated checks. Wake words, device control and generated chibi artwork are
-future additions; Marsi can already help describe scenes and write art prompts.
+This is a prototype. Measure speed and verify audio on the actual machines.
+The display, archive, schedule and local API have automated checks. Wake words,
+device control, raster chibi artwork, weather and news remain unfinished relics.
+The current loom makes ASCII inscriptions without an image model or external feed.
 
 The script-based Marsi lives in
 [his original repository](https://github.com/mbvoyager/tiny-tech-priest-marsi).

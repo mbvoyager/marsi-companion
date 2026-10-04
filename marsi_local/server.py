@@ -9,6 +9,8 @@ import json
 import logging
 import os
 import socket
+import threading
+from datetime import datetime
 from urllib.parse import parse_qs, urlsplit
 
 from .config import ServerConfig, load_env, validate_bind
@@ -24,7 +26,27 @@ class Server(ThreadingHTTPServer):
 
     def __init__(self, address, companion):
         self.companion = companion
+        self.stopping = threading.Event()
         super().__init__(address, Handler)
+
+    def observance_loop(self):
+        while not self.stopping.is_set():
+            try:
+                app = self.companion
+                app.observances.run(datetime.now().astimezone(), app.telemetry.pair(), app.config.observances)
+            except Exception as error:
+                LOG.error("Observance could not be recorded (%s)", type(error).__name__)
+            self.stopping.wait(60)
+
+    def start_observances(self):
+        self.scheduler = threading.Thread(target=self.observance_loop, daemon=True)
+        self.scheduler.start()
+
+    def server_close(self):
+        self.stopping.set()
+        if hasattr(self, "scheduler"):
+            self.scheduler.join(timeout=2)
+        super().server_close()
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -89,6 +111,17 @@ class Handler(BaseHTTPRequestHandler):
             if method == "GET" and path == "/health":
                 return self.respond(200, {"status": "ok", "mode": "demo" if app.config.demo else "local-llm"})
             self.authenticated()
+            if method == "GET" and path == "/v1/journal":
+                query = parse_qs(urlsplit(self.path).query)
+                session = session_name(query.get("session_id", ["pi"])[0])
+                return self.respond(200, app.memory.journal(session, before=int(query.get("before", [0])[0]),
+                                                          after=int(query.get("after", [0])[0]),
+                                                          limit=int(query.get("limit", [80])[0])))
+            if method == "POST" and path == "/v1/telemetry":
+                app.telemetry.receive_pi(self.read_json().get("readings"))
+                return self.respond(200, app.telemetry.pair())
+            if method == "GET" and path == "/v1/telemetry":
+                return self.respond(200, app.telemetry.pair())
             if method == "GET" and path == "/v1/memory":
                 query = parse_qs(urlsplit(self.path).query)
                 session = session_name(query.get("session_id", ["pi"])[0])
@@ -96,6 +129,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self.respond(200, {"session_id": session, "notes": app.memory.notes(session)})
             if (method, path) not in (("POST", "/v1/chat"), ("POST", "/v1/voice"),
                                       ("POST", "/v1/ritual"), ("POST", "/v1/memory"),
+                                      ("POST", "/v1/art"), ("POST", "/v1/sermon"), ("POST", "/v1/speak"),
                                       ("DELETE", "/v1/session")):
                 raise ServiceError("Unknown endpoint.", 404)
             if path == "/v1/voice":
@@ -127,11 +161,25 @@ class Handler(BaseHTTPRequestHandler):
                     result["heard"] = text
                 elif path == "/v1/chat":
                     result = app.chat(session, clean_text(payload.get("text")))
+                elif path in ("/v1/art", "/v1/sermon"):
+                    result = app.inscription(session, path.rsplit("/", 1)[1])
+                elif path == "/v1/speak":
+                    # Read a persisted observance aloud; no arbitrary text or
+                    # generated ASCII is passed to the speech engine.
+                    entry_id = payload.get("entry_id")
+                    if type(entry_id) is not int:
+                        raise ValueError("entry_id must be an integer")
+                    with app.memory.connect() as db:
+                        row = db.execute("SELECT spoken FROM journal WHERE session=? AND id=? AND kind IN ('morning','sermon','art')", (session, entry_id)).fetchone()
+                    if not row or not row[0]:
+                        raise ServiceError("Spoken inscription unavailable.", 404)
+                    result = {"text": row[0], "source": "playback", "entry_id": entry_id}
                 else:
                     result = ritual()
+                    app.memory.add_event(session, result)
                 if wants_audio:
                     try:
-                        result["audio_base64"] = base64.b64encode(app.speech.synthesize(result["text"])).decode("ascii")
+                        result["audio_base64"] = base64.b64encode(app.speech.synthesize(result.get("spoken_text") or result["text"])).decode("ascii")
                     except ServiceError as error:
                         result["voice_error"] = str(error)
                 self.respond(200, result)
@@ -141,8 +189,8 @@ class Handler(BaseHTTPRequestHandler):
             self.respond(400, {"error": str(error)})
         except (socket.timeout, ConnectionError):
             self.close_connection = True
-        except Exception:
-            LOG.exception("Marsi request failed")
+        except Exception as error:
+            LOG.error("Marsi request failed (%s)", type(error).__name__)
             self.respond(500, {"error": "Internal error. Check the server console."})
 
     def do_GET(self):
@@ -171,6 +219,7 @@ def main():
         validate_bind(args.host, config.token)
         app = Companion(config, speech=Speech(config))
         with Server((args.host, args.port), app) as server:
+            server.start_observances()
             LOG.info("Marsi listening on %s:%s (%s)", args.host, args.port, "template demo" if args.demo else config.model)
             server.serve_forever()
     except (ValueError, OSError) as error:

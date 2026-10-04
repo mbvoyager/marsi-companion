@@ -10,13 +10,19 @@ audio failure so later tests do not obscure its cause.
 
 ## 1. Conversation and display
 
-- [ ] Marsi opens fullscreen, animates and responds to controls.
+- [ ] Marsi opens fullscreen with black/red/green styling, a small ASCII figure
+      and readable Pi/server readings. Missing sensors show `--`.
 - [ ] Type `Hello Marsi. Explain what a Raspberry Pi does in two sentences.`
       Receive a useful reply from Qwen.
 - [ ] Type `For this test, my imaginary pet is a blue duck called Cogbert.`
       Then ask `What is my imaginary pet called?` Check recent conversation.
 - [ ] With **Voice** off, a typed reply appears without speaker playback.
 - [ ] Long replies remain readable by scrolling the text area.
+- [ ] Earlier human messages and Marsi replies remain visible, including after
+      closing and reopening the display. OLDER TRANSMISSIONS loads an earlier
+      page; LATEST returns to recent messages.
+- [ ] Type `art`, `sermon`, `help` and `exit`. Commands perform their local
+      action; `Tell me about art` remains a normal Qwen conversation.
 - [ ] Escape changes fullscreen to a window; Ctrl+Q closes Marsi. Reopen him.
 
 The model's answers vary. Separate conversational quality from whether a
@@ -29,7 +35,7 @@ there is no promised response time for the i5-4460.
       Use the Pi guide for wired audio or the Bluetooth guide for the receiver.
 - [ ] Enable **Voice**, type `Say a short hello.`, and hear the reply while its
       text appears. This checks Piper plus playback, without a microphone.
-- [ ] Press **Bless!** with Voice on and hear the ritual line.
+- [ ] Press **BLESS** with Voice on and hear the ritual line.
 - [ ] Turn Voice off and repeat Bless; the text and animation still work silently.
 
 The first spoken request after restarting Ubuntu's Marsi service may need more
@@ -44,6 +50,8 @@ means conversation succeeded but speech needs attention.
       **Finish**. Check the `Heard:` text and the written reply. This tests Whisper
       and Qwen while keeping speaker playback out of the test.
 - [ ] Repeat with Voice on and hear Marsi's answer. This verifies the whole path.
+- [ ] Repeat using F8 to start, then F8 to finish. Holding F8 should not toggle
+      recording repeatedly. The display must have keyboard focus.
 - [ ] Start a recording and let it reach 15 seconds. It should stop automatically
       and process the recording.
 - [ ] In a quiet room, use a short silence-only recording. Expect either a
@@ -98,14 +106,14 @@ Forget does not erase external backups or reset the local ritual timer.
 
 ## 5. Small rituals
 
-- [ ] With Voice off, press **Bless!** several times, waiting for each result.
+- [ ] With Voice off, press **BLESS** several times, waiting for each result.
       Look for a blessing, salute, inspection or doodle. Selection is random;
       four clicks do not guarantee all four animations.
-- [ ] Leave Rituals on and the display idle during the daytime. An automatic
+- [ ] Leave Idle rites on and the display idle during the daytime. An automatic
       ritual should appear after the configured 10–20 minute interval.
 - [ ] Automatic rituals are silent with the default
       `MARSI_RITUAL_SPEECH=false`, even when Voice is on.
-- [ ] Turn Rituals off and leave the display idle; automatic rituals stop.
+- [ ] Turn Idle rites off and leave the display idle; automatic rituals stop.
       Bless remains available for a manual ritual.
 
 For a shorter timer test, write down the existing settings in `.env.pi`, then
@@ -124,7 +132,7 @@ With the shorter interval, a ritual should then occur about every 30 seconds.
 Interacting postpones eligibility; missed rituals do not build up a backlog.
 
 To test spoken automatic rituals after playback works, temporarily set
-`MARSI_RITUAL_SPEECH=true`, leave Voice and Rituals on, and restart. Restore all
+`MARSI_RITUAL_SPEECH=true`, leave Voice and Idle rites on, and restart. Restore all
 normal timer, quiet-hour and speech settings when finished.
 
 ## 6. Connection loss and restart
@@ -132,8 +140,9 @@ normal timer, quiet-hour and speech settings when finished.
 - [ ] Close Marsi while idle or playing audio; the display exits and any active
       playback stops.
 - [ ] On Ubuntu, run `systemctl --user stop marsi-server`. On the Pi, a typed
-      request should show a connection error. His local animation continues;
-      silent automatic rituals can still run when due. A stalled request can
+      request should show a connection error. His ASCII blink continues and
+      loaded journal text stays visible. Server-backed rituals are unavailable.
+      A stalled request can
       take up to 240 seconds to time out.
 - [ ] On Ubuntu, run `systemctl --user start marsi-server`. Try another message
       from the Pi and receive a reply.
@@ -142,6 +151,25 @@ normal timer, quiet-hour and speech settings when finished.
 - [ ] If you enabled Pi startup, reboot the Pi and verify its display. For
       Bluetooth, also verify receiver reconnection, output selection and playback.
 
-Keep results as hardware observations, rather than assuming these steps have
-already passed. Wake words, continuous listening, device control, knowledge
-search and generated artwork are future features and are outside this checklist.
+## 7. Art, sermons and morning speech
+
+- [ ] Type `art` twice. See original ASCII machine diagrams with real available
+      numeric readings; unavailable Pi data is labelled as such. With Voice on,
+      Marsi speaks a description rather than reading punctuation.
+- [ ] Type `sermon`. See a short kind sermon framed by art; with Voice on, hear
+      the corresponding words. Reopen Marsi and find both inscriptions again.
+- [ ] Leave Ubuntu running over a day and check for one scheduled artwork.
+      Schedules are preserved if the server restarts.
+- [ ] Leave Ubuntu running for 2–3 days and find a scheduled tiny sermon.
+- [ ] With Voice and Idle rites on, leave both machines and the audio receiver
+      running before 07:00. Hear the morning greeting around 07:00, including
+      during default quiet hours. It includes date and available machine data.
+- [ ] Restart the display after an observance finishes speaking. Its local
+      delivery marker should prevent the same greeting being spoken again.
+
+Do not change the operating-system clock just to speed up these tests. Calendar
+and restart logic has automated tests; long-running checks verify the actual
+machines. See [behaviour](behaviour.md) for defaults and catch-up rules.
+
+Keep results as hardware observations. Wake words, continuous listening, device
+control, raster images, weather and news remain outside this checklist.

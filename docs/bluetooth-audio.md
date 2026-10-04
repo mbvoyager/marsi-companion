@@ -242,8 +242,8 @@ Save with Ctrl+O, Enter; exit with Ctrl+X. Restart Marsi from the physical conso
 startx "$HOME/marsi-companion/deploy/marsi-xsession.sh" -- -nocursor
 ```
 
-First enable **Voice** and type a short message. Then test **Bless!**. Finally,
-if recording worked, press **Talk**, speak, and press **Finish**.
+First enable **Voice** and type a short message. Then test **BLESS**. Finally,
+if recording worked, press **TALK** or F8, speak, and press **FINISH** or F8.
 
 If tones work but Marsi reports a voice-synthesis error, check Piper on Ubuntu
 using step 4 of [the server guide](ubuntu-server.md). If Marsi reports speaker

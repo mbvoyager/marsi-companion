@@ -82,9 +82,12 @@ On an existing desktop, open a terminal in the project directory and run:
 .venv-pi/bin/python -m marsi_local.pi
 ```
 
-The default display is fullscreen. Escape makes it a window; Ctrl+Q exits.
-Use `--windowed` during development. Type a message and press Send before testing
-the microphone. Replies can be scrolled in the text area, even on a 480×320 screen.
+The default display is fullscreen: black, Mars red, green phosphor, a small ASCII
+Marsi and machine readings. Escape makes it a window; Ctrl+Q or typed `exit` closes
+it. Use `--windowed` during development. Type a message and press Enter or SEND
+before testing the microphone. Both sides of conversations remain in the
+scrollable journal; OLDER TRANSMISSIONS loads earlier pages. The display supports
+800×480 and 480×320, with smaller lettering on the smaller screen.
 
 ## 3. Test the microphone and speaker
 
@@ -114,7 +117,9 @@ needed. Use the number actually reported on your Pi. Test the output with:
 speaker-test -t sine -c 1 -l 1
 ```
 
-Press **Talk**, speak for a few seconds, then press **Finish**. The recording stops
+Press **TALK** or **F8**, speak for a few seconds, then press **FINISH** or **F8**
+again. F8 applies while Marsi has keyboard focus; holding it down does not start
+repeated recordings. The recording stops
 automatically after 15 seconds. Marsi shows what he heard and plays the reply if
 Voice is enabled. Voice off skips synthesis as well as playback. The microphone
 does not record in idle mode or during playback, which avoids most echo loops.
@@ -130,32 +135,47 @@ re-pairing a Bluetooth device that already records and plays sound successfully.
 Use the [feature test checklist](test-checklist.md) to work through conversation,
 speech, notes, rituals, connection recovery and startup on your actual hardware.
 
-## 4. Tiny rituals and startup
+## 4. Routines and automatic startup
 
-The Rituals switch controls occasional visual blessings. **Bless!** requests an
-immediate ritual and uses the Voice switch. Automatic rituals are silent unless
-`MARSI_RITUAL_SPEECH=true`. Quiet hours apply to automatic rituals. Set the Pi's
-timezone correctly, for example `sudo timedatectl set-timezone Europe/Berlin`.
+The Idle rites switch controls spontaneous small rituals and scheduled speech.
+**BLESS** requests an immediate ritual; **ART** makes a hardware-shaped ASCII
+inscription. Typed `sermon` gives a tiny sermon. Manual requests use Voice.
+Small automatic rituals are silent unless `MARSI_RITUAL_SPEECH=true`.
+Ubuntu also schedules daily art, a sermon every 2–3 days and a 07:00 greeting.
+The greeting speaks during quiet hours by default; other automatic speech does
+not. See [behaviour and memory](behaviour.md) for every setting and timing rule.
+Set both machines' timezone correctly; `timedatectl` shows the current setting.
 
-For optional Lite boot startup, first verify display and audio manually. In
-`sudo raspi-config`, select console autologin for the local user. Then append
-this to that user's `~/.profile`:
+To make Marsi open at every Lite boot, first verify display and audio manually.
+Then run on the Pi:
 
 ```bash
-if [ -z "$DISPLAY" ] && [ "$(tty)" = /dev/tty1 ]; then
-    startx "$HOME/marsi-companion/deploy/marsi-xsession.sh" -- -nocursor
-fi
+cd ~/marsi-companion
+bash scripts/install-pi-autostart.sh --lite
+sudo raspi-config
 ```
 
-SSH logins will still get a normal shell. Remove that block to undo automatic
-display startup. This template assumes the checkout is in the user's home folder.
+Select **Console Autologin** in the boot/autologin settings, Finish, then
+`sudo reboot`. The installer preserves your profile and adds a marked startup
+block. SSH logins still get a normal shell. The display retries its server
+connection during boot; it does not require Ubuntu to be ready first.
+See [quickstart](quickstart.md#4-make-the-lite-pi-start-automatically) for Desktop
+startup, rollback and what to expect after reboot. The installer replaces its
+own marked block and the exact legacy block from this guide. It stops if it
+finds a custom Marsi startup entry it cannot safely identify.
 
-**Forget** deletes this session's saved conversation and notes from the server
+**FORGET** deletes this session's journal, working context, notes and schedule state from the server
 after a confirmation. Copies and backups of the database remain separate.
 
 ## Connection loss
 
 The Pi shows an error if the server is unavailable. It never silently switches
-Qwen replies to fake AI answers. Its local animation and silent ritual timer
-continue working; try another message once the server is back. An in-progress
+Qwen replies to fake AI answers. The ASCII character keeps blinking, and loaded
+journal text remains visible. Archive/telemetry connections retry automatically;
+server-backed rituals resume when reachable. Try another message once the server
+is back. An in-progress
 request can take up to 240 seconds to time out, while the screen remains responsive.
+
+[Useful troubleshooting commands](troubleshooting.md) cover the display process,
+boot launcher, audio services, server and logs. Lite startup logs go to
+`~/marsi-companion/data/pi-display.log`; these are private and excluded from Git.

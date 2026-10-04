@@ -17,11 +17,12 @@ built, understood and repaired.
 | --- | --- |
 | `marsi_local/demo.py` | Authored companion replies for no-model rehearsal |
 | `marsi_local/personality.txt` | Marsi's conversational character |
-| `marsi_local/core.py` | Ollama calls and bounded SQLite history/notes |
+| `marsi_local/core.py` | Ollama, durable journal, working context, notes and recall |
 | `marsi_local/speech.py` | Optional Whisper/Piper loading and WAV validation |
 | `marsi_local/server.py` | Authenticated HTTP endpoints |
 | `marsi_local/client.py` | Shared terminal/Pi API client |
-| `marsi_local/pi.py`, `ambient.py` | Display, push-to-talk, playback, rituals |
+| `marsi_local/pi.py`, `display.py`, `ambient.py` | Audio, ASCII terminal display and idle rites |
+| `marsi_local/telemetry.py`, `liturgy.py` | Numeric readings, original ASCII art and persistent calendar |
 | `config/` | Shareable setting examples, without credentials |
 | `deploy/`, `scripts/` | Installation and startup templates |
 
@@ -32,15 +33,22 @@ computer while keeping the same Pi interface.
 ## Memory and behaviour
 
 Conversation text is saved automatically in `data/companion.sqlite3` on the
-Ubuntu server. Each session retains up to 30 exchanges; the last six complete
+Ubuntu server. The journal preserves successful exchanges and observances until
+Forget. A separate working-context table retains up to 30 exchanges; the last six complete
 exchanges, limited to about 6,000 characters, are supplied to Qwen. This keeps
 the context small enough for our initial 4,096-token setting in normal short
 conversations. Long inputs or token-heavy languages may use more of that budget.
+Up to three older human messages matched by literal words in the current input
+are supplied as untrusted context, at most 500 characters each, searching at most
+2,000 older human messages. This is simple
+retrieval, not training. The display pages the journal and bounds its loaded
+entries to 600; it never loads the full archive into RAM at startup.
 
 Use `/remember TEXT` in the terminal client for an explicit note (up to 200
 characters), `/notes` to inspect notes, and `/forget` to clear the current
-session's history and notes. Each session holds up to 12 notes; at most 100
-sessions are retained. Both frontends default to the same `pi` session. Use
+session's journal, working context, notes and schedule. Each session holds up to
+12 notes; at most 100 sessions retain working context. Older journal entries and
+notes are not silently evicted by that limit. Both frontends default to the same `pi` session. Use
 distinct `MARSI_SESSION` values for independent conversations.
 
 The shared token is for one trusted household, not separate user accounts.
@@ -65,13 +73,19 @@ use `Content-Type: application/json`. The only unauthenticated route is health.
 | `POST /v1/chat` | `text`, `session_id`, optional boolean `want_audio` | Reply text, animation, source, optional WAV as `audio_base64` |
 | `POST /v1/voice` | `audio/wav` bytes; `X-Marsi-Session` header | Transcript, reply, optional audio; `?want_audio=false` skips synthesis |
 | `POST /v1/ritual` | `session_id`, optional `want_audio` | Authored ritual, independent of private memory |
+| `POST /v1/art`, `POST /v1/sermon` | `session_id`, optional `want_audio` | Authored/procedural inscription, archived; speech excludes diagrams |
+| `GET /v1/journal` | `session_id`, optional `before` or `after`, `limit` 1–100 | Chronological journal page and `has_more` |
+| `GET /v1/telemetry` | None | Numeric server readings and fresh Pi readings |
+| `POST /v1/telemetry` | `readings` object | Accept validated numeric Pi readings; return both machines |
+| `POST /v1/speak` | `session_id`, `entry_id`, `want_audio=true` | Read a persisted art/sermon/morning entry's spoken version |
 | `GET /v1/memory?session_id=pi` | Session in query | Explicit notes |
 | `POST /v1/memory` | `session_id`, `text` | Add explicit note |
-| `DELETE /v1/session` | `session_id` | Clear that session's notes and exchanges |
+| `DELETE /v1/session` | `session_id` | Clear that session's journal, context, notes and schedule |
 
 Chat text is capped at 2,000 characters. WAV uploads are capped at 2 MB and
 20 seconds, mono 16-bit PCM. One task at a time runs on the old CPU; simultaneous
-inference requests receive a retryable error. This is a small LAN prototype,
+inference requests receive a retryable error. Telemetry/journal reads do not take
+the inference lock, so the display can refresh while Qwen works. This is a small LAN prototype,
 not a public internet service. No browser frontend or CORS is required.
 
 ## Verification
@@ -81,12 +95,14 @@ From the checkout:
 ```bash
 python3 -m unittest discover -s tests -v
 python3 -m compileall -q marsi_local
-bash -n scripts/setup-server.sh scripts/setup-pi.sh deploy/marsi-xsession.sh
+for script in scripts/*.sh deploy/marsi-xsession.sh; do bash -n "$script"; done
 ```
 
 Tests exercise real local HTTP requests and a temporary SQLite database, with
 fake Qwen/speech engines. They verify authentication, bounded and durable memory,
 forgetting, busy handling, WAV limits, speech failure behaviour and quiet hours.
+They also exercise journal migration and pagination, recall, numeric-only
+telemetry, persistent routine targets, missed mornings and daylight-saving changes.
 They do not benchmark real models. The script bot has its own separate test suite.
 
 On Linux, install `python3-tk` and `xvfb`, then run:
@@ -96,7 +112,9 @@ xvfb-run -a python3 -m tests.pi_display_smoke
 ```
 
 The GitHub workflow runs tests on Python 3.10 and 3.12 and includes the real Tk
-widget smoke test. Actual microphone, speaker and model inference still need the
+widget smoke test for both supported screen sizes, exact commands and F8 key
+repeat handling. A separate model-free decoder test installs speech requirements
+on Python 3.10, 3.12 and 3.14. Actual microphone, speaker and model inference still need the
 hardware acceptance sequence in the setup guides.
 
 ## Next milestones
@@ -107,10 +125,11 @@ hardware acceptance sequence in the setup guides.
    resolution and touch input. Only then enable boot startup.
 3. Add streaming speech for shorter perceived delays and, if useful, a wake word
    with an obvious microphone indicator and physical mute option.
-4. Add an owner-reviewed memory editor and a small library of Marsi chibi artwork.
-   An image-generation engine is a separate optional project component.
-5. Add narrowly defined useful skills, such as read-only server health reporting.
-   Each device-changing action needs a deliberate interface and an explicit policy.
+4. Improve archive retrieval and add a reviewable memory editor. Raster chibi art
+   remains a separate optional image pipeline; current ASCII art needs no model.
+5. Add narrow weather/news integrations after choosing a location and source.
+   Read-only numeric hardware reporting already exists. Each future device-changing
+   action needs a deliberate interface and an explicit policy.
 
 ## Prompt for continuing on Ubuntu
 

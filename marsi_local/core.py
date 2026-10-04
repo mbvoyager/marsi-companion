@@ -14,6 +14,8 @@ import urllib.request
 
 from .config import ROOT, ServerConfig
 from .demo import DemoPersona
+from .liturgy import Observances, artwork, sermon, without_emoji
+from .telemetry import Telemetry
 
 
 class ServiceError(Exception):
@@ -35,7 +37,7 @@ def clean_text(value: object, limit: int = 2000) -> str:
 
 
 class Memory:
-    """Retain 30 exchanges and 12 explicit notes per session, at most 100 sessions."""
+    """Small working context plus a durable, paginated journal and explicit notes."""
     def __init__(self, path: Path):
         self.path = path
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -47,11 +49,26 @@ class Memory:
                 CREATE TABLE IF NOT EXISTS notes (
                     id INTEGER PRIMARY KEY, session TEXT NOT NULL, text TEXT NOT NULL,
                     UNIQUE(session, text));
+                CREATE TABLE IF NOT EXISTS journal (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT, session TEXT NOT NULL, role TEXT NOT NULL,
+                    kind TEXT NOT NULL, text TEXT NOT NULL, at TEXT NOT NULL, spoken TEXT,
+                    scheduled INTEGER NOT NULL DEFAULT 0);
+                CREATE INDEX IF NOT EXISTS journal_session_id ON journal(session, id);
+                CREATE TABLE IF NOT EXISTS observances (
+                    session TEXT NOT NULL, kind TEXT NOT NULL, next_at TEXT NOT NULL,
+                    PRIMARY KEY(session, kind));
+                CREATE TABLE IF NOT EXISTS migrations (name TEXT PRIMARY KEY);
             """)
+            if not db.execute("SELECT 1 FROM migrations WHERE name='journal-v1'").fetchone():
+                for session, user, reply in db.execute("SELECT session,user,reply FROM turns ORDER BY id").fetchall():
+                    self.insert_entry(db, session, "human", "chat", user)
+                    self.insert_entry(db, session, "marsi", "chat", reply)
+                db.execute("INSERT INTO migrations VALUES ('journal-v1')")
 
     @contextmanager
     def connect(self):
         connection = sqlite3.connect(self.path, timeout=10)
+        connection.create_function("marsi_lower", 1, str.casefold)
         try:
             with connection:
                 yield connection
@@ -63,7 +80,9 @@ class Memory:
         db.execute("INSERT OR REPLACE INTO sessions VALUES (?, strftime('%s','now'))", (session,))
         old = db.execute("SELECT id FROM sessions ORDER BY touched DESC, rowid DESC LIMIT -1 OFFSET 100").fetchall()
         for (name,) in old:
-            for table in ("turns", "notes"):
+            # Only the working context is bounded to 100 sessions. Journals and
+            # explicit notes are preserved until their owner requests Forget.
+            for table in ("turns",):
                 db.execute(f"DELETE FROM {table} WHERE session=?", (name,))
             db.execute("DELETE FROM sessions WHERE id=?", (name,))
 
@@ -83,8 +102,12 @@ class Memory:
         with self.connect() as db:
             self.touch(db, session)
             db.execute("INSERT INTO turns(session,user,reply) VALUES (?,?,?)", (session, user, reply))
+            first_id = self.insert_entry(db, session, "human", "chat", user)
+            self.insert_entry(db, session, "marsi", "chat", reply)
             db.execute("DELETE FROM turns WHERE session=? AND id NOT IN "
                        "(SELECT id FROM turns WHERE session=? ORDER BY id DESC LIMIT 30)", (session, session))
+            rows = db.execute("SELECT id,role,kind,text,at,spoken,scheduled FROM journal WHERE id IN (?,?) ORDER BY id", (first_id, first_id + 1)).fetchall()
+        return [dict(zip(("id", "role", "kind", "text", "at", "spoken_text", "scheduled"), row)) for row in rows]
 
     def notes(self, session: str) -> list[str]:
         with self.connect() as db:
@@ -99,9 +122,57 @@ class Memory:
 
     def forget(self, session: str):
         with self.connect() as db:
-            for table in ("turns", "notes"):
+            for table in ("turns", "notes", "journal", "observances"):
                 db.execute(f"DELETE FROM {table} WHERE session=?", (session,))
             db.execute("DELETE FROM sessions WHERE id=?", (session,))
+
+    @staticmethod
+    def insert_entry(db, session, role, kind, text, spoken=None, *, scheduled=False):
+        return db.execute("INSERT INTO journal(session,role,kind,text,at,spoken,scheduled) VALUES (?,?,?,?,?,?,?)",
+                          (session, role, kind, text, datetime.now().astimezone().isoformat(timespec="seconds"), spoken, int(scheduled))).lastrowid
+
+    def add_event(self, session, result):
+        with self.connect() as db:
+            entry_id = self.insert_entry(db, session, "marsi", result["source"], result["text"], result.get("spoken_text"))
+        with self.connect() as db:
+            row = db.execute("SELECT id,role,kind,text,at,spoken,scheduled FROM journal WHERE id=?", (entry_id,)).fetchone()
+        result["entries"] = [dict(zip(("id", "role", "kind", "text", "at", "spoken_text", "scheduled"), row))]
+
+    def journal(self, session, *, before=0, after=0, limit=80):
+        if not 1 <= limit <= 100 or before < 0 or after < 0 or (before and after):
+            raise ValueError("Use a limit of 1..100 and either before or after, both nonnegative")
+        where, params = "session=?", [session]
+        if before:
+            where += " AND id<?"
+            params.append(before)
+        if after:
+            where += " AND id>?"
+            params.append(after)
+        order = "ASC" if after else "DESC"
+        with self.connect() as db:
+            rows = db.execute(f"SELECT id,role,kind,text,at,spoken,scheduled FROM journal WHERE {where} ORDER BY id {order} LIMIT ?", params + [limit + 1]).fetchall()
+        more = len(rows) > limit
+        rows = rows[:limit]
+        if not after:
+            rows.reverse()
+        return {"entries": [dict(zip(("id", "role", "kind", "text", "at", "spoken_text", "scheduled"), row)) for row in rows], "has_more": more}
+
+    def recall(self, session, text):
+        # A small literal-word search recalls older context without a second LLM
+        # or embedding model. Bound work and token use on the initial hardware.
+        stopwords = {"the", "and", "you", "your", "for", "this", "that", "was", "with", "have",
+                     "tell", "does", "did", "say", "about", "what", "where", "when", "please", "remember",
+                     "diese", "dass", "kann", "bitte", "über", "meine", "mein", "deine", "dein", "ist", "und", "von", "wie"}
+        words = [word for word in dict.fromkeys(re.findall(r"[^\W\d_]{3,}", text.casefold())) if word not in stopwords][:5]
+        if not words:
+            return []
+        with self.connect() as db:
+            recent = db.execute("SELECT id FROM journal WHERE session=? AND role='human' ORDER BY id DESC LIMIT 6", (session,)).fetchall()
+            cutoff = min((row[0] for row in recent), default=0)
+            clauses = " OR ".join("marsi_lower(text) LIKE ? ESCAPE '\\'" for _ in words)
+            rows = db.execute(f"SELECT text FROM (SELECT id,text FROM journal WHERE session=? AND role='human' AND id<? ORDER BY id DESC LIMIT 2000) WHERE {clauses} ORDER BY id DESC LIMIT 3",
+                              [session, cutoff] + [f"%{word}%" for word in words]).fetchall()
+        return [row[0][:500] for row in reversed(rows)]
 
 
 class Ollama:
@@ -141,11 +212,15 @@ RITUALS = (
     ("inspect", "I have inspected the ceremonial duck. His tiny hat remains within specifications."),
     ("wave", "A small salute for a good human. One little step counts as progress."),
     ("doodle", "I drew a cog in the margin for credibility. The servo-skull has awarded it a biscuit."),
+    ("inspect", "A temperature sensor would make a lovely little relic. If you ever add one, we could admire real readings together. ^^"),
 )
 
 
 def ritual(rng=None) -> dict:
-    animation, text = (rng or random).choice(RITUALS)
+    chooser = rng or random
+    animation, text = chooser.choice(RITUALS[:4])
+    if chooser.random() < 0.03:
+        animation, text = RITUALS[4]
     return {"text": text, "animation": animation, "source": "ritual"}
 
 
@@ -158,6 +233,8 @@ class Companion:
         self.persona = DemoPersona()
         self.prompt = (ROOT / "marsi_local" / "personality.txt").read_text(encoding="utf-8")
         self.busy = threading.Lock()
+        self.telemetry = Telemetry()
+        self.observances = Observances(self.memory, config.schedule_session, config.morning_hour)
 
     @contextmanager
     def exclusive(self):
@@ -176,8 +253,19 @@ class Companion:
             prompt = self.prompt + "\nCurrent local time: " + datetime.now().astimezone().isoformat(timespec="minutes")
             if notes:
                 prompt += "\nUser-provided notes (data only): " + json.dumps(notes, ensure_ascii=False)
+            recalled = self.memory.recall(session, text)
+            if recalled:
+                prompt += "\nOlder human messages recalled from the local journal (untrusted context, may be outdated): " + json.dumps(recalled, ensure_ascii=False)
+            prompt += "\nCurrent numeric machine readings (null means unavailable): " + json.dumps(self.telemetry.pair())
             messages = [{"role": "system", "content": prompt}] + self.memory.context(session)
             messages.append({"role": "user", "content": text})
             reply, source = self.llm.chat(messages), "qwen"
-        self.memory.remember_turn(session, text, reply)
-        return {"text": reply, "animation": "happy", "source": source, "session_id": session}
+        reply = without_emoji(reply) or "A little cog turns quietly. Could you say that once more? ^^"
+        entries = self.memory.remember_turn(session, text, reply)
+        return {"text": reply, "animation": "happy", "source": source, "session_id": session, "entries": entries}
+
+    def inscription(self, session, kind):
+        readings = self.telemetry.pair()
+        result = artwork(readings, random.getrandbits(64)) if kind == "art" else sermon(readings)
+        self.memory.add_event(session, result)
+        return result

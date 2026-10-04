@@ -37,7 +37,7 @@ class Client:
             body = None
         request = urllib.request.Request(self.url + path, data=body, headers=headers, method=method)
         try:
-            with self.http.open(request, timeout=10 if path == "/health" else self.timeout) as response:
+            with self.http.open(request, timeout=10 if path == "/health" or path.startswith(("/v1/telemetry", "/v1/journal")) else self.timeout) as response:
                 raw = response.read(12_000_001)
             if len(raw) > 12_000_000:
                 raise ClientError("Marsi sent a reply that was too large.")
@@ -75,6 +75,32 @@ class Client:
     def remember(self, text: str):
         return self.request("/v1/memory", {"session_id": self.session, "text": clean_text(text, 200)})
 
+    def art(self, speak=False):
+        return self.request("/v1/art", {"session_id": self.session, "want_audio": speak})
+
+    def sermon(self, speak=False):
+        return self.request("/v1/sermon", {"session_id": self.session, "want_audio": speak})
+
+    def journal(self, *, before=0, after=0):
+        return self.request(f"/v1/journal?session_id={self.session}&before={before}&after={after}", method="GET")
+
+    def telemetry(self, readings):
+        return self.request("/v1/telemetry", {"readings": readings})
+
+    def speak_entry(self, entry_id):
+        return self.request("/v1/speak", {"session_id": self.session, "entry_id": entry_id, "want_audio": True})
+
+
+def command(text):
+    """Exact local commands; sentences containing their words remain conversation."""
+    name = text.strip().lower().lstrip("/")
+    return {"art": "art", "exit": "exit", "quit": "exit", "sermon": "sermon",
+            "ritual": "ritual", "bless": "ritual", "notes": "notes", "history": "history",
+            "help": "help", "forget": "forget"}.get(name)
+
+
+HELP = "art | sermon | bless | history | /remember TEXT | /notes | /forget | exit\nDisplay: F8 = Talk/Finish; Escape = window; Ctrl+Q = exit."
+
 
 def main():
     parser = argparse.ArgumentParser(description="Chat with Marsi, your local tech-priest companion")
@@ -82,24 +108,31 @@ def main():
     args = parser.parse_args()
     load_env(args.env)
     client = Client.from_env()
-    print("Marsi companion terminal: /remember TEXT, /notes, /forget, /ritual, /quit")
+    print("MARSI // ARCHIVUM MARTIS\n" + HELP)
     try:
         while True:
             text = input("You > ").strip()
             if not text:
                 continue
-            if text == "/quit":
+            action = command(text)
+            if action == "exit":
                 break
             try:
-                if text == "/forget":
+                if action == "forget":
                     client.forget()
                     print("This session's saved notes and conversation have been forgotten.")
-                elif text == "/notes":
+                elif action == "notes":
                     print(client.notes()["notes"])
                 elif text.startswith("/remember "):
                     print(client.remember(text[len("/remember "):])["notes"])
+                elif action == "help":
+                    print(HELP)
+                elif action == "history":
+                    for entry in client.journal()["entries"]:
+                        print(f"[{entry['at']}] {entry['role']} > {entry['text']}")
                 else:
-                    result = client.ritual() if text == "/ritual" else client.chat(text)
+                    task = {"art": client.art, "sermon": client.sermon, "ritual": client.ritual}.get(action)
+                    result = task() if task else client.chat(text)
                     print("Marsi > " + result["text"])
             except (ClientError, ValueError) as error:
                 print(str(error))
