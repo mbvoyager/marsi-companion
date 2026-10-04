@@ -219,6 +219,44 @@ Official speech instructions:
 
 ## Speech recognition fails after the microphone test passes
 
+### PyAV decoder compatibility
+
+If the original traceback ends with `TypeError: open() got an unexpected keyword
+argument 'metadata_errors'`, the installed PyAV version is incompatible with
+faster-whisper's decoder. [PyAV 19 removed that option](https://github.com/PyAV-Org/PyAV/releases/tag/v19.0.0).
+Marsi's speech requirements therefore limit PyAV to versions below 19. This is
+an audio library mismatch on Ubuntu; changing microphone settings will not fix it.
+
+For an existing installation, run the following on Ubuntu, locally or over SSH.
+Stop the service before replacing packages so it cannot retain the old library
+in memory:
+
+```bash
+cd ~/marsi-companion
+git pull --ff-only
+systemctl --user stop marsi-server
+.venv-server/bin/python -m pip install -r requirements-server.txt
+.venv-server/bin/python -m pip check
+.venv-server/bin/python -m unittest tests.speech_decoder_smoke -v
+.venv-server/bin/python -m marsi_local.speech --check-recognition
+```
+
+The package installer replaces an incompatible PyAV version with a compatible
+release. The decoder test uses generated WAV audio at 16 and 48 kHz, without
+downloading a model; the recognition check then exercises Whisper itself.
+These commands preserve settings, downloaded models and conversation memory.
+After both checks pass, start Marsi again:
+
+```bash
+systemctl --user start marsi-server
+```
+
+Then retry Talk on the Pi. If a command fails, keep its complete output and
+resolve that error before continuing. You can also start the service again with
+the command above to restore typed conversation while investigating speech.
+
+### Diagnose other recognition failures
+
 If a local recording on the Pi is clear, and Marsi can speak typed replies, the
 speaker path and Piper work. A transcription exception still needs diagnosis on
 **Ubuntu**, where Whisper runs. The older message `Speech recognition failed.
