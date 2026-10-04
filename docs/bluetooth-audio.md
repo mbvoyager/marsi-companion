@@ -7,9 +7,9 @@ microphone recording and speaker playback.
 The instructions below target Raspberry Pi OS **Bookworm or Trixie**. Check with
 `cat /etc/os-release`. If your release is older, capture its name before changing
 the audio setup. Close Marsi with Ctrl+Q during setup; reopen him after testing.
-Use the Pi's physical console for the initial tests. Bluetooth audio access is
-normally associated with the active local login, so SSH alone can be misleading.
-See [WirePlumber's login-session explanation](https://pipewire.pages.freedesktop.org/wireplumber/daemon/configuration/bluetooth.html#logind-integration).
+Bluetooth audio access is normally associated with the active local login.
+For setup over SSH, use the version-specific option in step 2 below. The GUI
+still starts from the Pi's physical console as described in the Pi setup guide.
 
 ## 1. Understand the receiver
 
@@ -61,6 +61,57 @@ keep its error and stop there. If `pactl info` reports connection refused, inspe
 systemctl --user status pipewire pipewire-pulse wireplumber
 ```
 
+### SSH or unattended operation: WirePlumber 0.5
+
+If pairing succeeds but connecting reports `br-connection-profile-unavailable`,
+check the audio packages and services above before changing settings. With
+services running and the Bluetooth plugin installed, SSH without a local seat
+session can leave Bluetooth audio profiles unavailable. Inspect:
+
+```bash
+wireplumber --version
+loginctl list-sessions
+```
+
+For **WirePlumber 0.5.x**, the dedicated Marsi user's audio service can be allowed
+to use Bluetooth without an active local login. This is the upstream
+[headless Bluetooth configuration](https://pipewire.pages.freedesktop.org/wireplumber/daemon/configuration/bluetooth.html#logind-integration).
+Run as the same user who runs Marsi, without sudo:
+
+```bash
+cd ~/marsi-companion
+git pull --ff-only
+mkdir -p ~/.config/wireplumber/wireplumber.conf.d
+cp deploy/wireplumber/51-marsi-bluetooth.conf ~/.config/wireplumber/wireplumber.conf.d/
+systemctl --user restart wireplumber
+systemctl --user is-active wireplumber
+```
+
+The included fragment sets `monitor.bluez.seat-monitoring` to `disabled` within
+the main profile. It augments the distribution's settings through the documented
+[configuration-fragment mechanism](https://pipewire.pages.freedesktop.org/wireplumber/daemon/configuration/conf_file.html#fragments).
+After the service reports `active`, retry the receiver connection in step 3 and
+check `pactl list short sinks`. If it still fails, keep the connection error and:
+
+```bash
+journalctl --user -u wireplumber -b --no-pager -n 60
+```
+
+For WirePlumber **0.4.x**, this fragment does not apply; use an active physical
+console session for the initial test, or obtain instructions for that version.
+Do not mix the older Lua configuration format with WirePlumber 0.5.
+
+For an unattended Pi, optionally keep this user's services running after SSH
+logout with `sudo loginctl enable-linger "$USER"`. This does not start the GUI;
+its startup is configured separately in [the Pi guide](raspberry-pi.md).
+To undo the 0.5 Bluetooth setting, remove only the file installed above and
+restart WirePlumber:
+
+```bash
+rm ~/.config/wireplumber/wireplumber.conf.d/51-marsi-bluetooth.conf
+systemctl --user restart wireplumber
+```
+
 ## 3. Pair the receiver
 
 Start the Bluetooth controller:
@@ -99,7 +150,7 @@ These operations are documented in [BlueZ's controller manual](https://manpages.
 If the controller says it is blocked, inspect `rfkill list`; `sudo rfkill unblock
 bluetooth` clears a software block. If it reports no controller, keep that error
 instead of continuing with pairing commands. If audio services are unavailable,
-first check step 2 and the active local login.
+first check step 2, including its SSH option when applicable.
 
 ## 4. Test the speaker before Marsi's voice
 
