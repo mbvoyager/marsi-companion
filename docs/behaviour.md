@@ -2,8 +2,10 @@
 
 The terminal archive wears blackened iron, oxide red, worn ivory and muted green.
 Parallel circuit traces, cog teeth and mechanical inscriptions span its upper
-and lower borders and archive rail. An elongated skull reliquary stands beside
-the journal. Travelling signals and optical lenses respond to idle, listening,
+and lower borders and archive rail. A cute, red-hooded Tech-Priest with oversized
+cyan optics and a little dataslate stands beside the journal. He breathes,
+blinks, looks around, leans in to listen and nods during speech.
+Travelling signals and optical lenses respond to idle, listening,
 thinking and speaking states. Static drawings are cached; the five-frame-per-second
 animation moves existing items. Typing, voice and history remain available at
 800x480 and 480x320. This uses ordinary Tk widgets, not a terminal emulator.
@@ -17,9 +19,10 @@ connection and his personal reliquary are original character lore.
 
 His hunger is for data: observations, readings, diagrams, histories and tested
 ideas. He asks a specific question when useful, without demanding secrets,
-money or constant attention. Unknown telemetry stays unknown. His appearance
-is grim; his manner remains gentle. An explicit question about the actual
-software receives an honest answer; ordinary conversation stays in character.
+money or constant attention. Unknown telemetry stays unknown. His surroundings
+are grim; the little priest's appearance and manner are gentle. An explicit
+question about the actual software receives an honest answer; ordinary
+conversation stays in character.
 
 The artworks are original procedural ASCII compositions inspired by sacred
 machine diagrams, guided by the owner's four electoo and reliquary references.
