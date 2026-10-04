@@ -132,6 +132,11 @@ with tempfile.TemporaryDirectory() as state:
                 display.mode = mode
                 display.draw(123.4)
                 root.update()
+                # Updating readings and mode labels can resize the canvas during
+                # Tk's layout pass. Repaint at that settled size before checking
+                # that subsequent animation frames reuse the static artwork.
+                display.draw(123.4)
+                assert display.electoos[-1].key == (display.canvas.winfo_width(), display.canvas.winfo_height())
                 assert display.canvas.find_all(), "ASCII character should be visible"
                 assert display.reply.winfo_height() > 100, "Archive must remain useful"
                 assert display.talk.winfo_viewable(), "Talk must be visible"
