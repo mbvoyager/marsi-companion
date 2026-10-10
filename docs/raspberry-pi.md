@@ -162,12 +162,14 @@ Then run on the Pi:
 
 ```bash
 cd ~/marsi-companion
-bash scripts/install-pi-autostart.sh --lite
-sudo raspi-config
+bash scripts/install-pi-autostart.sh --lite --enable-autologin
 ```
 
-Select **Console Autologin** in the boot/autologin settings, Finish, then
-`sudo reboot`. The installer preserves your profile and adds a marked startup
+Run as the same Pi user who runs Marsi, without `sudo` before `bash`. The option
+configures Console Autologin through `raspi-config`, using sudo for that OS
+setting only. Reboot when ready with `sudo reboot`. To configure OS autologin
+manually instead, omit `--enable-autologin` and use the boot/autologin settings
+in `sudo raspi-config`. The installer preserves your profile and adds a marked startup
 block. SSH logins still get a normal shell. The display retries its server
 connection during boot; it does not require Ubuntu to be ready first.
 See [quickstart](quickstart.md#4-make-the-lite-pi-start-automatically) for Desktop

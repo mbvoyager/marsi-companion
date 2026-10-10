@@ -56,8 +56,11 @@ class AudioTests(unittest.TestCase):
         callback = Mock()
         paths = []
         @contextmanager
-        def process(command, stdout, stderr):
+        def process(command, stdout, stderr, env):
             self.assertEqual(command[:4], ["aplay", "-q", "-D", "pipewire"])
+            self.assertIn("--buffer-time=1000000", command)
+            self.assertIn("--period-time=100000", command)
+            self.assertEqual(env["LC_ALL"], "C")
             paths.append(Path(command[-1]))
             self.assertEqual(paths[-1].read_bytes(), sample)
             stderr.write(b"ALSA: Unknown PCM pipewire")
@@ -68,6 +71,63 @@ class AudioTests(unittest.TestCase):
                 audio.play(sample, callback)
         self.assertFalse(paths[0].exists())
         self.assertIsNone(callback.call_args.args[0])
+
+    def test_recovered_underrun_is_not_silently_treated_as_success(self):
+        os.environ.update(MARSI_SPEAKER_DEVICE="plughw:CARD=Test,DEV=0",
+                          MARSI_PLAYBACK_BUFFER_MS="800", MARSI_PLAYBACK_PERIOD_MS="80")
+        paths = []
+        @contextmanager
+        def process(command, stdout, stderr, env):
+            paths.append(Path(command[-1]))
+            self.assertIn("--buffer-time=800000", command)
+            self.assertIn("--period-time=80000", command)
+            stderr.write(b"underrun!!! (at least 124.000 ms long)\n")
+            stderr.flush()
+            yield SimpleNamespace(wait=lambda timeout: 0)
+        with patch.object(audio.subprocess, "Popen", process):
+            with self.assertRaisesRegex(audio.AudioError, "lost audio samples"):
+                audio.play(audio.tone())
+        self.assertFalse(paths[0].exists())
+
+    def test_invalid_playback_buffer_never_opens_a_device(self):
+        for buffer, period in (("text", "100"), ("99", "10"), ("1000", "600")):
+            os.environ.update(MARSI_PLAYBACK_BUFFER_MS=buffer, MARSI_PLAYBACK_PERIOD_MS=period)
+            with patch.object(audio.subprocess, "Popen") as player:
+                with self.assertRaises(audio.AudioError):
+                    audio.play(audio.tone())
+                player.assert_not_called()
+
+    def test_wave_report_distinguishes_file_silence_from_continuous_audio(self):
+        active = struct.pack("<h", 3000) * 16000
+        sample = audio.wav_bytes(active + b"\0\0" * 16000 + active, 16000)
+        info = audio.wav_report(sample)
+        self.assertEqual(info["seconds"], 3)
+        self.assertEqual(info["quiet_spans"], [(1, 2)])
+        self.assertEqual(audio.wav_report(audio.tone(15))["quiet_spans"], [])
+        with self.assertRaisesRegex(audio.AudioError, "truncated"):
+            audio.wav_report(sample[:-100])
+
+    def test_continuous_check_does_not_record_or_contact_the_server(self):
+        with patch("builtins.input", side_effect=["", "yes"]), \
+                patch.object(audio, "play") as player, patch.object(audio, "record") as recorder, \
+                patch("sys.stdout", new_callable=io.StringIO):
+            self.assertTrue(audio.check_playback())
+        info = audio.wav_report(player.call_args.args[0])
+        self.assertEqual(info["seconds"], 15)
+        self.assertEqual(info["quiet_spans"], [])
+        recorder.assert_not_called()
+
+    def test_local_wav_cli_uses_the_same_playback_adapter(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "test.wav"
+            path.write_bytes(audio.tone())
+            with patch.object(sys, "argv", ["audio", "--play", str(path)]), \
+                    patch.object(audio, "play") as player, patch.object(audio, "record") as recorder, \
+                    patch("sys.stdout", new_callable=io.StringIO):
+                self.assertEqual(audio.main(), 0)
+            player.assert_called_once_with(path.read_bytes())
+            recorder.assert_not_called()
 
     def test_play_timeout_kills_process_and_clears_handle(self):
         process = Mock()

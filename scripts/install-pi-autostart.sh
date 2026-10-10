@@ -1,13 +1,30 @@
 #!/usr/bin/env bash
-# Install only Marsi's startup entry. OS console autologin is a separate choice.
+# Install Marsi's startup entry; optionally configure OS autologin too.
 set -euo pipefail
+mode=--lite
+autologin=false
+for argument in "$@"; do
+    case "$argument" in
+        --lite|--desktop) mode="$argument" ;;
+        --enable-autologin) autologin=true ;;
+        *) printf '%s\n' 'Usage: bash scripts/install-pi-autostart.sh --lite|--desktop [--enable-autologin]' >&2; exit 2 ;;
+    esac
+done
+if [[ "$EUID" -eq 0 ]]; then
+    printf '%s\n' 'Run as the user who runs Marsi, without sudo. Only OS autologin uses sudo.' >&2
+    exit 1
+fi
+if "$autologin" && ! command -v raspi-config >/dev/null; then
+    printf '%s\n' 'raspi-config is missing. Install it on Raspberry Pi OS before enabling autologin.' >&2
+    exit 1
+fi
 cd -- "$(dirname -- "$0")/.."
 if [[ "$PWD" != "$HOME/marsi-companion" ]]; then
     printf '%s\n' 'This template expects the checkout at ~/marsi-companion.' >&2
     exit 1
 fi
 chmod +x deploy/marsi-xsession.sh
-case "${1:---lite}" in
+case "$mode" in
     --lite)
         python3 - <<'PY'
 from pathlib import Path
@@ -39,7 +56,9 @@ fi
 '''
 profile.write_text(original.rstrip() + '\n\n' + block)
 PY
-        printf '%s\n' 'Startup entry installed. In sudo raspi-config choose Console Autologin, then reboot.'
+        if ! "$autologin"; then
+            printf '%s\n' 'Startup entry installed. In sudo raspi-config choose Console Autologin, then reboot.'
+        fi
         ;;
     --desktop)
         mkdir -p "$HOME/.config/autostart"
@@ -50,7 +69,15 @@ Name=Marsi companion
 Exec=sh -c "cd ~/marsi-companion && exec .venv-pi/bin/python -m marsi_local.pi"
 Terminal=false
 DESKTOP
-        printf '%s\n' 'Desktop startup installed. Enable desktop autologin in raspi-config if desired.'
+        if ! "$autologin"; then
+            printf '%s\n' 'Desktop startup installed. Enable desktop autologin in raspi-config if desired.'
+        fi
         ;;
     *) printf '%s\n' 'Usage: bash scripts/install-pi-autostart.sh --lite|--desktop' >&2; exit 2 ;;
 esac
+if "$autologin"; then
+    boot_mode=B2
+    if [[ "$mode" == --desktop ]]; then boot_mode=B4; fi
+    sudo raspi-config nonint do_boot_behaviour "$boot_mode"
+    printf '%s\n' 'Marsi startup and OS autologin configured. Reboot with sudo reboot when ready.'
+fi

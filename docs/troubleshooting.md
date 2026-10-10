@@ -79,6 +79,7 @@ These steps follow [Ubuntu's OpenSSH guide](https://ubuntu.com/server/docs/how-t
 | `grep -A 5 '# BEGIN MARSI DISPLAY' ~/.profile` | Is the installed Lite startup block present? |
 | `ls -l ~/.config/autostart/marsi.desktop` | Is Desktop startup installed? Only for Desktop |
 | `sudo raspi-config` | Configure console autologin and other Pi settings |
+| `bash scripts/install-pi-autostart.sh --lite --enable-autologin` | In the checkout, install the Lite launcher and enable console autologin; run without sudo before bash |
 | `vcgencmd measure_temp` | Pi temperature, where the Pi utility is installed |
 | `vcgencmd get_throttled` | Pi power/thermal flags; preserve the value for diagnosis |
 | `free -h` / `df -h` / `top` / `timedatectl` | RAM, storage, CPU, clock |
@@ -106,6 +107,13 @@ route warnings. `--status` provides a silent readiness report. See
 [audio check and recovery](audio-check.md) for how to interpret each failure and
 restore Bluetooth profiles, routes and volume. Test local audio before opening
 the display or changing Ubuntu's speech recognizer.
+
+For breaks during speech, use the
+[continuous tone and original-WAV comparison](audio-check.md#6-breaks-or-stuttering-during-speech).
+On the Pi, `.venv-pi/bin/python -m marsi_local.audio --check-playback` plays
+15 seconds without intended gaps. On Ubuntu,
+`.venv-server/bin/python -m marsi_local.speech --synthesize data/voice-check.wav`
+saves a Piper diagnostic without calling Qwen or changing the journal.
 
 Run these as Marsi's Pi user:
 

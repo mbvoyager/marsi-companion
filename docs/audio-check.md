@@ -5,12 +5,13 @@ Use this page whenever the speaker or microphone stops working. Run the commands
 check: sound comes from the Pi's attached speaker and microphone. Ubuntu does not
 need to be running for these local tests.
 
-## 1. Close Marsi and keep the receiver powered
+## 1. Close Marsi and keep the audio device connected
 
 Type `exit` or press Ctrl+Q in Marsi. From SSH, see
 [how to stop the display](troubleshooting.md#pi-display-and-boot).
-Keep the Bluetooth receiver's USB power connected and its speaker/headphones
-connected. Temporarily turn off phone Bluetooth so the phone cannot reclaim it.
+For a USB speakerphone, keep its USB data cable connected to the Pi. For Bluetooth,
+keep the receiver's power and speaker/headphones connected. Temporarily turn off
+phone Bluetooth so the phone cannot reclaim the receiver.
 Start with a low speaker volume.
 
 Update the Pi's checkout, preserving your existing `.env.pi`:
@@ -58,7 +59,38 @@ contains speech. The display performs this silent check in the background at
 startup and adds warnings to its local terminal view. It remains usable by typing
 if audio is unavailable. Starting Marsi does not play a test tone or record you.
 
-## 3. Restore Bluetooth audio if the check fails
+## 3. USB speakerphones
+
+List the USB device on both playback and capture sides:
+
+```bash
+aplay -l
+arecord -l
+```
+
+An AIRHUG 06 may appear as card `A06`, device `0`. Use your actual output. If
+Marsi uses `pipewire` for both devices, check that its defaults point to the
+USB speaker and real microphone, rather than HDMI or an old Bluetooth receiver:
+
+```bash
+pactl get-default-sink
+pactl get-default-source
+pactl list short sinks
+pactl list short sources
+```
+
+An input ending in `.monitor` records speaker output. The real USB microphone
+normally starts with `alsa_input.usb-`. Use the actual names from your output
+with `pactl set-default-sink` and `pactl set-default-source` if needed. Do not
+change working routes simply because their idle state says `SUSPENDED`.
+
+For direct ALSA playback, use a **card ID** instead of a number that can change
+after reboot. For example, `plughw:CARD=A06,DEV=0` selects this card and allows
+ALSA to convert Piper's sample rate to a format the USB device supports. Direct
+playback is also a useful comparison if the PipeWire route has breaks; see below.
+Keep the microphone setting unchanged while testing the speaker.
+
+## 4. Restore Bluetooth audio if the check fails
 
 First inspect the services and receiver:
 
@@ -135,7 +167,7 @@ the check. USB microphones may use a different name or index. Device selection
 and supported-rate checking use the
 [sounddevice hardware API](https://python-sounddevice.readthedocs.io/en/0.5.3/api/checking-hardware.html).
 
-## 4. Repeat the check, then start Marsi
+## 5. Repeat the check, then start Marsi
 
 ```bash
 .venv-pi/bin/python -m marsi_local.audio --check
@@ -152,6 +184,113 @@ If microphone replay passes but recognition fails, use
 Those server failures do not require re-pairing a receiver that passes the local
 test. Repeat the local check after reboot or a receiver power cycle if audio
 stops working again.
+
+## 6. Breaks or stuttering during speech
+
+The server sends a complete WAV before the Pi starts playback. A slow Qwen
+response or LAN transfer delays the start; it does not feed this player a word
+at a time. Test the generated file and the local playback route separately.
+
+### First, test continuous sound on the Pi
+
+Close Marsi, lower the speaker volume, then run:
+
+```bash
+cd ~/marsi-companion
+.venv-pi/bin/python -m marsi_local.audio --check-playback
+```
+
+This plays **15 seconds of one continuous tone**, with no intended gaps. It
+uses Marsi's speaker settings and does not record, use Qwen or contact Ubuntu.
+If this tone breaks, the interruption is in the Pi/audio path.
+
+For a USB card listed as `A06`, compare direct USB playback without editing
+`.env.pi`:
+
+```bash
+MARSI_SPEAKER_DEVICE=plughw:CARD=A06,DEV=0 .venv-pi/bin/python -m marsi_local.audio --check-playback
+```
+
+If it reports `Device or resource busy`, PipeWire or another application may
+still own the USB device. Stop playback/recording applications and wait a few
+seconds for idle devices to release. If needed, temporarily run the commands
+below, test direct playback, then restore the audio services. Do this with Marsi
+closed; it interrupts PipeWire audio for your user:
+
+```bash
+systemctl --user stop wireplumber pipewire-pulse.service pipewire-pulse.socket pipewire.service pipewire.socket
+MARSI_SPEAKER_DEVICE=plughw:CARD=A06,DEV=0 .venv-pi/bin/python -m marsi_local.audio --check-playback
+systemctl --user start pipewire.socket pipewire-pulse.socket wireplumber.service
+```
+
+Only use that service sequence when you installed PipeWire. If direct USB is
+continuous while PipeWire breaks, either investigate PipeWire's scheduling or
+set **only** `MARSI_SPEAKER_DEVICE=plughw:CARD=A06,DEV=0` in `.env.pi`. Keep the
+working microphone route and repeat the full recording/replay check afterward.
+
+Marsi now requests a 1000 ms playback buffer and 100 ms period. The device
+negotiates the actual values, which can be smaller. Existing `.env.pi` files get
+these defaults without editing. Override them only when comparing settings:
+
+```text
+MARSI_PLAYBACK_BUFFER_MS=1000
+MARSI_PLAYBACK_PERIOD_MS=100
+```
+
+A larger buffer can tolerate scheduling delays and can add startup latency. It
+cannot repair gaps already present in the WAV or a disconnecting USB device.
+ALSA can recover from a buffer underrun and return success; Marsi now reports
+that interruption instead of silently treating it as clean playback. The
+[aplay manual](https://manpages.debian.org/trixie/alsa-utils/aplay.1.en.html)
+documents buffering and recovery. No resampling is forcibly disabled.
+
+If both playback routes break, inspect the Pi while testing:
+
+```bash
+vcgencmd get_throttled
+top
+journalctl -k -b --no-pager | tail -n 60
+journalctl --user -u pipewire -u wireplumber -n 60 --no-pager
+```
+
+`throttled=0x0` means no power/thermal throttling flags are set at the time of
+the check. USB disconnect/reset messages point to the USB connection, cable or
+power path. Test another data cable/port if those messages occur. Preserve the
+actual output before changing system-wide settings.
+
+### Then, compare the original voice WAV
+
+Run **on Ubuntu**, while not requesting another voiced reply:
+
+```bash
+cd ~/marsi-companion
+git pull --ff-only
+.venv-server/bin/python -m marsi_local.speech --synthesize data/voice-check.wav
+```
+
+This generates three short English sentences through your configured Piper
+voice, saves the exact WAV, and reports its duration and quiet spans. It does
+not run Whisper or Qwen and does not read/change your conversation journal.
+Use `--text "YOUR TEST SENTENCE"` to test wording that showed the problem.
+The output is private and excluded from Git. The command refuses to overwrite
+an existing file; remove only `data/voice-check.wav` when deliberately repeating
+the diagnostic. Use text in the installed voice's language for the baseline.
+
+Copy that file from Ubuntu to **the Pi**. Replace the two placeholders below
+with your Ubuntu login and reachable server address:
+
+```bash
+cd ~/marsi-companion
+scp YOUR_UBUNTU_USER@YOUR_SERVER_IP:~/marsi-companion/data/voice-check.wav data/voice-check.wav
+.venv-pi/bin/python -m marsi_local.audio --play data/voice-check.wav
+```
+
+Also listen to the same file on another computer/player if available. Quiet
+spans measured in the file may be ordinary sentence pauses; they are not proof
+of failure. If the same long breaks occur at the same points in another player,
+inspect the wording, voice language and Piper output. If they occur only on the
+Pi, continue investigating playback. This avoids guessing and cutting normal
+pauses out of speech. Delete the diagnostic WAV on both machines when finished.
 
 Diagnostic output can contain device names and Bluetooth addresses. Review it
 before posting publicly. Never post `.env.pi`, which also contains your token.

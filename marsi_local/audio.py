@@ -8,6 +8,8 @@ import io
 import json
 import math
 import os
+from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -18,6 +20,7 @@ import wave
 from .config import load_env
 
 CHECK_COMMAND = ".venv-pi/bin/python -m marsi_local.audio --check"
+MAX_PLAYBACK_BYTES = 8_000_000
 
 
 class AudioError(ValueError):
@@ -77,18 +80,33 @@ def record(stop: threading.Event, seconds=15) -> bytes:
         raise AudioError(f"Microphone recording failed: {error}. Run {CHECK_COMMAND}") from error
 
 
+def playback_settings():
+    try:
+        buffer = int(os.getenv("MARSI_PLAYBACK_BUFFER_MS", "1000"))
+        period = int(os.getenv("MARSI_PLAYBACK_PERIOD_MS", "100"))
+    except ValueError as error:
+        raise AudioError("Playback buffer and period must be whole milliseconds.") from error
+    if not 100 <= buffer <= 2000 or not 10 <= period <= buffer // 2:
+        raise AudioError("Playback buffer must be 100..2000 ms; period must be 10 ms..half the buffer.")
+    return buffer, period
+
+
 def play(audio: bytes, on_process=lambda process: None):
     device = os.getenv("MARSI_SPEAKER_DEVICE")
+    buffer, period = playback_settings()
     # A private temporary directory is removed after playback, including on failure.
     try:
         with tempfile.TemporaryDirectory(prefix="marsi-") as folder:
             path = os.path.join(folder, "reply.wav")
             with open(path, "wb") as file:
                 file.write(audio)
-            command = ["aplay", "-q"] + (["-D", device] if device else []) + [path]
+            command = ["aplay", "-q"] + (["-D", device] if device else []) + [
+                f"--buffer-time={buffer * 1000}", f"--period-time={period * 1000}", path,
+            ]
             # A file avoids deadlock on a full stderr pipe while keeping ALSA's error.
             with tempfile.TemporaryFile() as errors:
-                with subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=errors) as process:
+                with subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=errors,
+                                      env={**os.environ, "LC_ALL": "C"}) as process:
                     on_process(process)
                     try:
                         code = process.wait(timeout=120)
@@ -98,21 +116,78 @@ def play(audio: bytes, on_process=lambda process: None):
                         raise AudioError("Speaker playback timed out. Check the receiver's connection.") from error
                     finally:
                         on_process(None)
+                    errors.seek(0)
+                    detail = errors.read(8192).decode("utf-8", errors="replace").strip()
                     if code != 0:
-                        errors.seek(0)
-                        detail = errors.read(1000).decode("utf-8", errors="replace").strip()
                         raise AudioError(f"Speaker playback failed: {detail or 'aplay exit ' + str(code)}")
+                    # ALSA can recover an underrun and still exit successfully.
+                    # Surface those lost samples instead of reporting clean audio.
+                    if re.search(r"\b(?:underrun|xrun)\b", detail, re.IGNORECASE):
+                        raise AudioError("Speaker playback had buffer underruns (lost audio samples). "
+                                         "Run the continuous playback check; see docs/audio-check.md.")
     except OSError as error:
         raise AudioError(f"Speaker could not open: {error}. Check alsa-utils and the audio device.") from error
 
 
-def tone() -> bytes:
+def tone(seconds: int = 1) -> bytes:
     rate = 16000
+    length = rate * seconds
     samples = array("h", (int(2600 * math.sin(2 * math.pi * 660 * i / rate)
-                              * min(1, i / 320, (rate - i) / 320)) for i in range(rate)))
+                              * min(1, i / 320, (length - i) / 320)) for i in range(length)))
     if sys.byteorder != "little":
         samples.byteswap()
     return wav_bytes(samples.tobytes(), rate)
+
+
+def wav_report(audio: bytes):
+    """Describe PCM and quiet spans; a quiet span is not proof of an audio fault."""
+    with wave.open(io.BytesIO(audio), "rb") as wav:
+        if wav.getsampwidth() != 2 or wav.getnchannels() not in (1, 2) or wav.getcomptype() != "NONE":
+            raise AudioError("The WAV check needs mono/stereo 16-bit PCM audio.")
+        rate, channels, frames = wav.getframerate(), wav.getnchannels(), wav.getnframes()
+        if not 8000 <= rate <= 192000 or not 0 < frames <= rate * 120:
+            raise AudioError("Test WAV must be 0..120 seconds at 8..192 kHz.")
+        raw = wav.readframes(frames)
+    if len(raw) != frames * channels * 2:
+        raise AudioError("The WAV file is truncated.")
+    samples = array("h", raw)
+    if sys.byteorder != "little":
+        samples.byteswap()
+    block = max(1, round(rate * .02)) * channels
+    quiet, start = [], None
+    for offset in range(0, len(samples), block):
+        window = samples[offset:offset + block]
+        rms = math.sqrt(sum(value * value for value in window) / len(window)) / 32768
+        if rms < .001:
+            if start is None:
+                start = offset
+        elif start is not None:
+            if (offset - start) / channels / rate >= .8:
+                quiet.append((start / channels / rate, offset / channels / rate))
+            start = None
+    if start is not None and (len(samples) - start) / channels / rate >= .8:
+        quiet.append((start / channels / rate, frames / rate))
+    return {"seconds": frames / rate, "rate": rate, "channels": channels, "quiet_spans": quiet}
+
+
+def describe_wav(audio: bytes):
+    info = wav_report(audio)
+    print(f"WAV: {info['seconds']:.2f}s; {info['rate']} Hz; {info['channels']} channel(s); 16-bit PCM.")
+    if info["quiet_spans"]:
+        print("Quiet spans >= 0.8s (RMS below 0.1%): " + ", ".join(
+            f"{start:.2f}..{end:.2f}s" for start, end in info["quiet_spans"][:20]))
+    else:
+        print("No quiet spans >= 0.8s at this threshold.")
+    print("Quiet spans may be normal pauses. This measures the file, not speaker performance.")
+
+
+def read_playback_wav(path: Path):
+    with path.open("rb") as file:
+        audio = file.read(MAX_PLAYBACK_BYTES + 1)
+    if len(audio) > MAX_PLAYBACK_BYTES:
+        raise AudioError("Test WAV exceeds 8 MB.")
+    wav_report(audio)
+    return audio
 
 
 def recording_levels(audio: bytes):
@@ -187,6 +262,11 @@ def inspect_audio() -> AudioReport:
     mic_setting = os.getenv("MARSI_MIC_DEVICE", "")
     output = os.getenv("MARSI_SPEAKER_DEVICE", "")
     report.lines.append(f"Marsi settings: microphone={mic_setting or '(default)'}; speaker={output or '(default)'}; rate={os.getenv('MARSI_MIC_RATE', '16000')}")
+    try:
+        buffer, period = playback_settings()
+        report.lines.append(f"Requested playback buffer={buffer} ms; period={period} ms (device negotiates actual values).")
+    except AudioError as error:
+        report.issues.append(str(error))
     try:
         import sounddevice as sd
         device, rate = microphone_settings()
@@ -270,16 +350,38 @@ def check_audio() -> bool:
     return passed
 
 
+def check_playback():
+    print("Continuous speaker test: 15 seconds, low-volume tone, no intended pauses.")
+    print("Uses Marsi's configured speaker and buffer. No microphone, server or recording.")
+    input("Lower the speaker volume, then press Enter: ")
+    play(tone(15))
+    heard = confirm("Did you hear one continuous tone without gaps?")
+    print("[PASS] Continuous playback heard." if heard else
+          "[NOT READY] Playback gaps are local to the Pi/audio path. See docs/audio-check.md.")
+    return heard
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--env", default=".env.pi")
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--check", action="store_true", help="interactive tone, five-second recording and replay")
     mode.add_argument("--status", action="store_true", help="read-only routes and settings; no sound or recording")
+    mode.add_argument("--check-playback", action="store_true", help="15-second continuous tone; no microphone or server")
+    mode.add_argument("--play", type=Path, metavar="WAV", help="play a local PCM WAV using Marsi's actual speaker settings")
+    mode.add_argument("--analyze", type=Path, metavar="WAV", help="inspect quiet spans in a local PCM WAV without playing it")
     args = parser.parse_args()
     try:
         load_env(args.env)
-        if args.check:
+        if args.play or args.analyze:
+            sample = read_playback_wav(args.play or args.analyze)
+            describe_wav(sample)
+            if args.play:
+                play(sample)
+            passed = True
+        elif args.check_playback:
+            passed = check_playback()
+        elif args.check:
             passed = check_audio()
         else:
             report = inspect_audio()
@@ -295,6 +397,8 @@ def main():
         return 1
     except ValueError as error:
         parser.exit(1, f"Audio settings error: {error}\n")
+    except (OSError, wave.Error) as error:
+        parser.exit(1, f"Audio file error: {error}\n")
 
 
 if __name__ == "__main__":

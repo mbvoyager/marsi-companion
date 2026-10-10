@@ -1,5 +1,9 @@
 """Execute the installer's actual profile editor against a temporary home."""
 from pathlib import Path
+import os
+import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -56,6 +60,34 @@ fi
         self.install()
         self.assertEqual(self.profile.read_text().count("startx "), 1)
         self.assertIn('[ -z "$DISPLAY" ]', self.profile.read_text())
+
+
+@unittest.skipUnless(sys.platform == "linux" and os.geteuid() != 0, "Needs a normal Linux user and Bash")
+class StartupShellTests(unittest.TestCase):
+    def test_lite_installer_enables_autologin_only_when_requested(self):
+        with tempfile.TemporaryDirectory() as folder:
+            home = Path(folder)
+            project = home / "marsi-companion"
+            (project / "scripts").mkdir(parents=True)
+            (project / "deploy").mkdir()
+            script = project / "scripts" / "install-pi-autostart.sh"
+            shutil.copy2(ROOT / "scripts" / script.name, script)
+            (project / "deploy" / "marsi-xsession.sh").write_text("#!/bin/sh\nexit 0\n")
+            commands = home / "bin"
+            commands.mkdir()
+            log = home / "calls.txt"
+            for name in ("sudo", "raspi-config"):
+                stub = commands / name
+                stub.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$MARSI_TEST_CALLS"\n')
+                stub.chmod(0o700)
+            env = {**os.environ, "HOME": str(home), "PATH": str(commands) + ":" + os.environ["PATH"],
+                   "MARSI_TEST_CALLS": str(log)}
+            subprocess.run(["bash", str(script), "--lite"], env=env, check=True, capture_output=True)
+            self.assertFalse(log.exists(), "Default install must leave OS login settings alone")
+            subprocess.run(["bash", str(script), "--lite", "--enable-autologin"],
+                           env=env, check=True, capture_output=True)
+            self.assertEqual(log.read_text().splitlines(), ["raspi-config nonint do_boot_behaviour B2"])
+            self.assertEqual((home / ".profile").read_text().count("# BEGIN MARSI DISPLAY"), 1)
 
 
 if __name__ == "__main__":

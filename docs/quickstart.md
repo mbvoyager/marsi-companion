@@ -101,13 +101,16 @@ After the manual display and audio tests work, run **on the Pi**:
 
 ```bash
 cd ~/marsi-companion
-bash scripts/install-pi-autostart.sh --lite
-sudo raspi-config
+bash scripts/install-pi-autostart.sh --lite --enable-autologin
 ```
 
-In raspi-config, choose **Console Autologin** in its boot/autologin settings,
-then Finish. Names vary slightly by OS version; see the
-[official configuration guide](https://www.raspberrypi.com/documentation/computers/configuration.html).
+Run the script as your usual Pi user, **without sudo before `bash`**. The
+`--enable-autologin` option uses sudo only to configure console autologin for
+that user through `raspi-config`. It does not reboot immediately. The attached
+console will log in automatically after boot; SSH keeps its normal login.
+This uses the [official noninteractive boot setting](https://www.raspberrypi.com/documentation/computers/configuration.html).
+To keep OS login settings unchanged, omit `--enable-autologin` and choose
+Console Autologin separately in `sudo raspi-config`.
 The installer adds a marked block to `~/.profile`, preserves the rest of it and
 makes a first backup as `~/.profile.before-marsi`. It launches only on the local
 console `/dev/tty1`, so SSH logins remain ordinary shells.
@@ -123,17 +126,38 @@ sudo reboot
 
 The SSH session will disconnect. The display should open after the Pi boots.
 The Ubuntu server also needs to be running; the display retries its connection
-until the server is ready. Keep the Bluetooth receiver powered and verify its
-reconnection separately using [Bluetooth audio](bluetooth-audio.md).
+until the server is ready. Keep a USB speakerphone attached. For Bluetooth,
+keep the receiver powered and verify reconnection separately using
+[Bluetooth audio](bluetooth-audio.md).
+
+If the Ubuntu service was already installed, ensure **on Ubuntu** that both
+services are enabled and that Marsi's user services can start without a login:
+
+```bash
+systemctl --user enable --now marsi-server
+sudo loginctl enable-linger "$USER"
+sudo systemctl enable --now ollama
+systemctl --user is-enabled marsi-server
+systemctl --user is-active marsi-server
+loginctl show-user "$USER" -p Linger
+```
+
+The last three checks should report `enabled`, `active` and `Linger=yes`.
+After an Ubuntu reboot, check again through SSH; use a chat to verify Qwen
+inference. If `marsi-server` is missing, install it using step 6 of the Ubuntu
+guide before running these commands.
 
 For a Desktop installation, use `bash scripts/install-pi-autostart.sh --desktop`
 instead. It creates `~/.config/autostart/marsi.desktop`; do not install both
-startup methods. Autologin must be enabled separately for an unattended boot.
+startup methods. Add `--enable-autologin` to enable desktop autologin too,
+or configure it separately in raspi-config.
 
 To undo Lite display startup, edit `~/.profile` and remove only the block between
 `# BEGIN MARSI DISPLAY` and `# END MARSI DISPLAY`. To undo Desktop startup, remove
 only `~/.config/autostart/marsi.desktop`. A deliberate `exit` returns to the
 console on Lite; it does not erase settings or memory.
+Console autologin can be disabled separately with
+`sudo raspi-config nonint do_boot_behaviour B1`.
 
 ## 5. Verify the new features
 

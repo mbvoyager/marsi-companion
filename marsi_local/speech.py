@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import io
 import logging
+import os
 from pathlib import Path
 import wave
 
@@ -122,17 +123,39 @@ def main():
                        help="Test decoding, speech detection and Whisper using in-memory silence")
     modes.add_argument("--transcribe", type=Path,
                        help="Transcribe a local test WAV and print the result; does not call Qwen")
+    modes.add_argument("--synthesize", type=Path, metavar="WAV",
+                       help="Save a diagnostic Piper WAV without calling Qwen or changing the journal")
+    parser.add_argument("--text", help="Text for --synthesize; defaults to three short English test sentences")
     parser.add_argument("--no-vad", action="store_true",
                         help="Skip speech detection for a recognition diagnostic only")
     args = parser.parse_args()
     if args.no_vad and not (args.check_recognition or args.transcribe):
         parser.error("--no-vad requires --check-recognition or --transcribe")
+    if args.text is not None and not args.synthesize:
+        parser.error("--text requires --synthesize")
     load_env(args.env)
     speech = Speech(ServerConfig.from_env())
     # Diagnostic failures retain their chained traceback in this explicitly
     # invoked terminal check. Routine server logs contain no exception text.
     if args.check_recognition:
         speech.check_recognition(no_vad=args.no_vad)
+        return
+    if args.synthesize:
+        from .audio import describe_wav
+        text = args.text if args.text is not None else (
+            "Hello, little keeper. The machines are awake today. "
+            "This is a test of my voice, with three short sentences."
+        )
+        if not text.strip():
+            parser.error("Synthesis text cannot be empty")
+        audio = speech.synthesize(text)
+        args.synthesize.parent.mkdir(parents=True, exist_ok=True)
+        # A requested diagnostic must never overwrite another local recording.
+        descriptor = os.open(args.synthesize, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(descriptor, "wb") as file:
+            file.write(audio)
+        print(f"Saved Piper output to {args.synthesize}. No Qwen request or journal entry was made.")
+        describe_wav(audio)
         return
     if args.transcribe:
         with args.transcribe.open("rb") as file:
