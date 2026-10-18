@@ -29,9 +29,10 @@ def main():
     root = tk.Tk()
     try:
         display = Display(root, Client.from_env(), windowed=args.windowed)
-        # Readiness is silent and runs off the UI thread. Explicit --check records.
+        # Startup checks routes only: PortAudio's hardware enumeration can open
+        # USB devices even without recording. Defer it until Talk or --check.
         def readiness():
-            report = inspect_audio()
+            report = inspect_audio(probe_hardware=False)
             if report.issues:
                 display.events.put(("audio_status", report.issues))
         threading.Thread(target=readiness, daemon=True).start()

@@ -169,7 +169,7 @@ class AudioTests(unittest.TestCase):
                              "bluez_output.TEST", "speaker.monitor", check_input=False)
         self.assertFalse(report.issues)
 
-    def test_inspection_is_read_only_and_handles_missing_service(self):
+    def test_inspection_does_not_record_and_handles_missing_service(self):
         os.environ.update(MARSI_MIC_DEVICE="pipewire", MARSI_SPEAKER_DEVICE="pipewire")
         sd = SimpleNamespace(query_devices=Mock(return_value={"name": "pipewire", "max_input_channels": 64}),
                              check_input_settings=Mock())
@@ -198,6 +198,47 @@ class AudioTests(unittest.TestCase):
             report = audio.inspect_audio()
         self.assertFalse(report.issues)
         self.assertTrue(any("headset-head-unit" in line for line in report.lines))
+        sd.check_input_settings.assert_called_once_with(device="pipewire", channels=1, dtype="int16", samplerate=16000)
+
+    def test_startup_checks_routes_without_portaudio_or_alsa_enumeration(self):
+        sinks, sources, cards = self.routes()
+        replies = {"sinks": json.dumps(sinks), "sources": json.dumps(sources), "cards": json.dumps(cards),
+                   "get-default-sink": "bluez_output.TEST", "get-default-source": "bluez_input.TEST"}
+        def query(command):
+            self.assertEqual(command[0], "pactl")
+            return replies[command[-1]]
+        for setting in ("pipewire", "default", ""):
+            with self.subTest(microphone=setting), \
+                    patch.dict(os.environ, MARSI_MIC_DEVICE=setting, MARSI_SPEAKER_DEVICE="pipewire"), \
+                    patch.dict(sys.modules, sounddevice=None), \
+                    patch.object(audio.shutil, "which", return_value="pactl"), \
+                    patch.object(audio, "query", side_effect=query):
+                report = audio.inspect_audio(probe_hardware=False)
+            self.assertFalse(report.issues)
+            self.assertIn("Input route: bluez_input.TEST", report.lines)
+            self.assertTrue(any("Route check only" in line for line in report.lines))
+
+    def test_startup_still_warns_about_muted_speakers_and_monitor_input(self):
+        os.environ.update(MARSI_MIC_DEVICE="pipewire", MARSI_SPEAKER_DEVICE="pipewire")
+        sinks, sources, cards = self.routes(source="speaker.monitor", mute=True)
+        replies = {"sinks": json.dumps(sinks), "sources": json.dumps(sources), "cards": json.dumps(cards),
+                   "get-default-sink": "bluez_output.TEST", "get-default-source": "speaker.monitor"}
+        with patch.dict(sys.modules, sounddevice=None), patch.object(audio.shutil, "which", return_value="pactl"), \
+                patch.object(audio, "query", side_effect=lambda command: replies[command[-1]]):
+            report = audio.inspect_audio(probe_hardware=False)
+        self.assertTrue(any("Output is muted" in issue for issue in report.issues))
+        self.assertTrue(any("monitor, not a microphone" in issue for issue in report.issues))
+        self.assertEqual(len(report.issues), 2)
+
+    def test_startup_validates_settings_without_opening_direct_devices(self):
+        os.environ.update(MARSI_MIC_DEVICE="7", MARSI_MIC_RATE="12345", MARSI_SPEAKER_DEVICE="plughw:CARD=TEST,DEV=0",
+                          MARSI_PLAYBACK_BUFFER_MS="invalid")
+        with patch.dict(sys.modules, sounddevice=None), patch.object(audio, "query") as query:
+            report = audio.inspect_audio(probe_hardware=False)
+        query.assert_not_called()
+        self.assertTrue(any("MARSI_MIC_RATE" in issue for issue in report.issues))
+        self.assertTrue(any("whole milliseconds" in issue for issue in report.issues))
+        self.assertEqual(len(report.issues), 2)
 
     def interactive(self, responses, sample):
         with patch.object(audio, "inspect_audio", return_value=audio.AudioReport()), \

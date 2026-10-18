@@ -77,9 +77,10 @@ This opens Marsi on the attached screen. A normal SSH shell cannot substitute
 for the physical console for this `startx` command. From an existing desktop's
 terminal, use `.venv-pi/bin/python -m marsi_local.pi` instead.
 
-Startup also runs a silent audio readiness check and displays any warnings. It
-does not play a tone or record a microphone sample; use the manual check above
-to verify actual sound. Typed conversation stays available if audio is missing.
+Startup silently checks audio settings and PipeWire/PulseAudio routes and
+displays any warnings. It does not probe the microphone hardware, play a tone or
+record a sample; use the manual check above to verify actual sound. Typed
+conversation stays available if audio is missing.
 
 - Type a sentence and press Enter or SEND.
 - Press **F8** or TALK, speak, then press **F8** or FINISH. F8 works while the

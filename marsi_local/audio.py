@@ -274,8 +274,8 @@ def inspect_routes(report: AudioReport, sinks, sources, cards, default_sink, def
         report.lines.append("No Bluetooth audio card is exposed. If using Bluetooth, check power, connection and WirePlumber.")
 
 
-def inspect_audio() -> AudioReport:
-    """Read-only readiness check: no recording, playback or configuration changes."""
+def inspect_audio(*, probe_hardware=True) -> AudioReport:
+    """Inspect settings/routes; explicit diagnostics may also open hardware to probe it."""
     report = AudioReport()
     mic_name = ""
     mic_setting = os.getenv("MARSI_MIC_DEVICE", "")
@@ -287,23 +287,31 @@ def inspect_audio() -> AudioReport:
     except AudioError as error:
         report.issues.append(str(error))
     try:
-        import sounddevice as sd
         device, rate = microphone_settings()
-        mic = sd.query_devices(device, "input")
-        mic_name = mic["name"]
-        report.lines.append(f"PortAudio input: {mic_name}; input channels={mic['max_input_channels']}")
-        sd.check_input_settings(device=device, channels=1, dtype="int16", samplerate=rate)
+        if probe_hardware:
+            # Importing sounddevice initializes PortAudio. Its ALSA enumeration
+            # opens devices to inspect capabilities, even without recording.
+            import sounddevice as sd
+            mic = sd.query_devices(device, "input")
+            mic_name = mic["name"]
+            report.lines.append(f"PortAudio input: {mic_name}; input channels={mic['max_input_channels']}")
+            sd.check_input_settings(device=device, channels=1, dtype="int16", samplerate=rate)
     except Exception as error:
         report.issues.append(f"Microphone settings unavailable: {error}")
-    try:
-        devices = query(["aplay", "-L"])
-        if output and output not in {line for line in devices.splitlines() if line and not line[0].isspace()}:
-            # Explicit plughw/hw names are valid even when not individually listed.
-            if not output.startswith(("plughw:", "hw:")):
-                report.issues.append(f"ALSA playback device '{output}' is not listed by aplay -L.")
-    except AudioError as error:
-        report.issues.append(str(error))
-    bridge_input = mic_name.casefold() in ("pipewire", "pulse", "default") or mic_setting in ("pipewire", "pulse")
+    if probe_hardware:
+        try:
+            devices = query(["aplay", "-L"])
+            if output and output not in {line for line in devices.splitlines() if line and not line[0].isspace()}:
+                # Explicit plughw/hw names are valid even when not individually listed.
+                if not output.startswith(("plughw:", "hw:")):
+                    report.issues.append(f"ALSA playback device '{output}' is not listed by aplay -L.")
+        except AudioError as error:
+            report.issues.append(str(error))
+    else:
+        report.lines.append("Route check only. Microphone hardware is checked when recording or running --check/--status.")
+    bridge_input = (mic_name.casefold() in ("pipewire", "pulse", "default")
+                    or mic_setting in ("pipewire", "pulse")
+                    or (not probe_hardware and mic_setting in ("default", "")))
     bridge_output = output in ("pipewire", "pulse", "default", "")
     if bridge_input or bridge_output:
         if shutil.which("pactl"):

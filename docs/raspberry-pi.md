@@ -123,10 +123,11 @@ it. Use `--windowed` during development. Both sides of conversations remain in
 the scrollable journal; OLDER TRANSMISSIONS loads earlier pages. The display
 supports 800×480 and 480×320, with smaller lettering on the smaller screen.
 
-Startup checks audio readiness silently in the background and adds any warnings
-to the local terminal view; typed conversation remains available. It does not
-play a test tone or record you. Enable Voice, type a sentence and press Enter or
-SEND. Hear Marsi's spoken reply before trying speech recognition.
+Startup silently checks audio settings and PipeWire/PulseAudio routes and adds
+any warnings to the local terminal view; typed conversation remains available.
+It does not probe the microphone hardware, play a test tone or record you.
+Enable Voice, type a sentence and press Enter or SEND. Hear Marsi's spoken reply
+before trying speech recognition.
 
 Press **TALK** or **F8**, speak for a few seconds, then press **FINISH** or **F8**
 again. F8 applies while Marsi has keyboard focus; holding it down does not start

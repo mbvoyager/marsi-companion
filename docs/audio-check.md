@@ -55,9 +55,16 @@ For a silent report without recording or playback, run:
 ```
 
 This reports readiness only; it cannot prove a speaker is audible or a microphone
-contains speech. The display performs this silent check in the background at
-startup and adds warnings to its local terminal view. It remains usable by typing
-if audio is unavailable. Starting Marsi does not play a test tone or record you.
+contains speech. The command also checks microphone capabilities through
+PortAudio, which may briefly open audio devices to inspect them.
+
+The display's background startup check only validates settings and reads the
+selected PipeWire/PulseAudio routes. It does **not** initialize PortAudio or scan
+ALSA devices. It still warns about missing routes, muting, zero volume or a
+monitor selected as the microphone. Direct hardware availability and supported
+microphone formats are checked when you use Talk or the explicit diagnostic.
+The display remains usable by typing if audio is unavailable. Starting Marsi
+does not play a test tone or record you.
 
 ## 3. USB speakerphones
 
@@ -311,6 +318,20 @@ original speech signal next; a device can also react repeatedly to the same
 signal, so that result alone does not establish the cause.
 
 ### If speech breaks only while the GUI is open
+
+First update the Pi and close/reopen the display so it uses the new startup
+check described above. No Ubuntu update or audio setting change is needed for
+this particular Pi-side change. Start a fresh display session and try a typed
+Voice reply **before using Talk/F8, `--check`, `--status` or `--list-audio`**.
+Those microphone actions initialize PortAudio; typed Voice replies and
+`--check-voice` do not. Compare the speech diagnostic over SSH with the display
+open, then test Talk separately if typed replies are clear. If breaks begin only
+after the microphone is used, note that distinction and preserve fresh USB logs.
+
+This comparison checks a possible trigger, not a confirmed cause of USB resets.
+PortAudio's ALSA backend opens audio devices while building its device list; see
+the [upstream implementation](https://github.com/PortAudio/portaudio/blob/master/src/hostapi/alsa/pa_linux_alsa.c).
+Removing that work from GUI startup avoids unnecessary hardware probing.
 
 Keep the display open and idle. In SSH window 1, start `--check-voice` and wait
 at its first playback prompt. In SSH window 2, run:
