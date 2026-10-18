@@ -310,6 +310,58 @@ associated with the display. Identical repeated breaks suggest inspecting the
 original speech signal next; a device can also react repeatedly to the same
 signal, so that result alone does not establish the cause.
 
+### If speech breaks only while the GUI is open
+
+Keep the display open and idle. In SSH window 1, start `--check-voice` and wait
+at its first playback prompt. In SSH window 2, run:
+
+```bash
+ps -eo pid,comm,pcpu,pmem,args --sort=-pcpu | head -n 12
+pw-top -b -n 15
+```
+
+Immediately switch to window 1 and press Enter to play the already downloaded
+WAV. This captures playback without guessing how long a Qwen response will take.
+The `ps` CPU values are averages over each process's lifetime, not instantaneous
+measurements; the short-lived `ps` process itself is not evidence of overload.
+
+In `pw-top`, check the actual output underneath the `aplay` stream. If a USB
+sink disappears, the stream moves to onboard headphones/HDMI, and the USB sink
+returns under a new ID, investigate device removal or reconfiguration before
+blaming rendering load. An `ERR` count of zero does not establish a stable
+connection: routing can change without an underrun being counted. Idle
+`SUSPENDED` nodes alone are normal. See the
+[pw-top manual](https://docs.pipewire.org/page_man_pw-top_1.html).
+
+Immediately after an affected playback, inspect the logs in the same SSH
+window; simultaneous terminals are no longer needed:
+
+```bash
+sudo journalctl -k -b --since "10 minutes ago" --no-pager | grep -Ei 'usb|snd|audio|under.?voltage|over.?current|reset|disconnect' | tail -n 80
+journalctl --user -b -u wireplumber -u pipewire --since "10 minutes ago" --no-pager | tail -n 80
+```
+
+Kernel USB disconnect/re-enumeration messages distinguish physical/driver
+reconnections from changes visible only to the audio service. Check the data
+cable, port, hub and power supply if the kernel reports repeated disconnects.
+Repeated `reset full-speed USB device` and `device descriptor read/64, error -32`
+messages likewise require investigating the USB connection/driver, not just
+audio buffering. Identify the device with `lsusb` before attributing a USB port
+path to a particular peripheral. The error alone does not establish a faulty
+cable or insufficient power; see the
+[kernel USB error documentation](https://docs.kernel.org/driver-api/usb/error-codes.html).
+Test one change at a time using the same voice diagnostic and display state.
+For the Pi 3 B+, Raspberry Pi specifies a 2.5 A supply and a 1.2 A total USB
+peripheral budget; see the
+[official power requirements](https://www.raspberrypi.com/documentation/computers/raspberry-pi.html#power-supply).
+Read the power adapter supplying the **Pi**, not the speakerphone's own power
+rating. A USB-powered display may share the Pi's peripheral budget; test it
+with its own supported power supply if available. Check the supplied adapter
+and data cable as well as the Pi's USB port before making persistent changes.
+Neither a working tone nor earlier `throttled=0x0` readings establish that every
+later USB connection is stable. Do not disable power management globally on
+the basis of the sound symptom alone.
+
 ### Optional: save the source WAV for comparison on another computer
 
 Run **on Ubuntu**, while not requesting another voiced reply:
