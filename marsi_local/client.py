@@ -90,6 +90,12 @@ class Client:
     def speak_entry(self, entry_id):
         return self.request("/v1/speak", {"session_id": self.session, "entry_id": entry_id, "want_audio": True})
 
+    def check_voice(self, text=None):
+        payload = {"session_id": self.session, "want_audio": True}
+        if text is not None:
+            payload["text"] = clean_text(text, 300)
+        return self.request("/v1/voice-check", payload)
+
 
 def command(text):
     """Exact local commands; sentences containing their words remain conversation."""

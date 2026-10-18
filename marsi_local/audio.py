@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 from array import array
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 import io
 import json
@@ -18,6 +19,7 @@ import threading
 import wave
 
 from .config import load_env
+from .audio_transfer import reply_audio
 
 CHECK_COMMAND = ".venv-pi/bin/python -m marsi_local.audio --check"
 MAX_PLAYBACK_BYTES = 8_000_000
@@ -91,22 +93,39 @@ def playback_settings():
     return buffer, period
 
 
-def play(audio: bytes, on_process=lambda process: None):
-    device = os.getenv("MARSI_SPEAKER_DEVICE")
-    buffer, period = playback_settings()
-    # A private temporary directory is removed after playback, including on failure.
-    try:
+@contextmanager
+def playback_source(audio: bytes):
+    """Linux playback uses a seekable anonymous RAM file, not an SD-card WAV."""
+    if sys.platform == "linux":
+        if not hasattr(os, "memfd_create"):
+            raise AudioError("RAM playback requires Linux memfd support (Python 3.8+).")
+        descriptor = os.memfd_create("marsi-voice", flags=os.MFD_CLOEXEC)
+        with os.fdopen(descriptor, "w+b") as file:
+            file.write(audio)
+            file.flush()
+            file.seek(0)
+            yield f"/proc/self/fd/{file.fileno()}", {"pass_fds": (file.fileno(),)}
+    else:
+        # Portable development fallback; deployment is on Raspberry Pi OS/Linux.
         with tempfile.TemporaryDirectory(prefix="marsi-") as folder:
             path = os.path.join(folder, "reply.wav")
             with open(path, "wb") as file:
                 file.write(audio)
+            yield path, {}
+
+
+def play(audio: bytes, on_process=lambda process: None):
+    device = os.getenv("MARSI_SPEAKER_DEVICE")
+    buffer, period = playback_settings()
+    try:
+        with playback_source(audio) as (path, process_options):
             command = ["aplay", "-q"] + (["-D", device] if device else []) + [
                 f"--buffer-time={buffer * 1000}", f"--period-time={period * 1000}", path,
             ]
             # A file avoids deadlock on a full stderr pipe while keeping ALSA's error.
             with tempfile.TemporaryFile() as errors:
                 with subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=errors,
-                                      env={**os.environ, "LC_ALL": "C"}) as process:
+                                      env={**os.environ, "LC_ALL": "C"}, **process_options) as process:
                     on_process(process)
                     try:
                         code = process.wait(timeout=120)
@@ -346,7 +365,7 @@ def check_audio() -> bool:
     passed = output_ok and input_ok and not report.issues
     print("\n[PASS] Local audio works. Open Marsi and test a typed Voice reply, then F8." if passed else
           "\n[NOT READY] Fix the reported layer, then repeat this check. See docs/audio-check.md.")
-    print("The sample was not sent to Ubuntu or retained; playback's temporary file was removed.")
+    print("The sample was not sent to Ubuntu or retained after the check.")
     return passed
 
 
@@ -361,6 +380,31 @@ def check_playback():
     return heard
 
 
+def check_voice(text=None):
+    from .client import Client, ClientError
+    print("Server voice test: Piper -> complete WAV -> transfer -> Pi playback.")
+    print("No Qwen request, microphone recording or journal entry. Lower the speaker volume.")
+    try:
+        result = Client.from_env().check_voice(text)
+    except ClientError as error:
+        raise AudioError(f"Server voice test failed: {error}") from error
+    if result.get("voice_error"):
+        raise AudioError(result["voice_error"])
+    sample = reply_audio(result, require_checksum=True)
+    print(f"[RECEIVED] Complete WAV: {len(sample)} bytes; SHA-256 matches the server.")
+    describe_wav(sample)
+    print("Test text: " + result["text"])
+    input("Press Enter for playback 1 of 2: ")
+    play(sample)
+    input("Press Enter to replay the identical WAV from memory: ")
+    play(sample)
+    heard = confirm("Were both playbacks free of unexpected breaks?")
+    print("[PASS] Server voice transfer and playback heard." if heard else
+          "[NOT READY] Note whether breaks repeat at the same words/times. See docs/audio-check.md.")
+    print("No test audio was saved to the conversation archive or a persistent WAV file.")
+    return heard
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--env", default=".env.pi")
@@ -368,9 +412,13 @@ def main():
     mode.add_argument("--check", action="store_true", help="interactive tone, five-second recording and replay")
     mode.add_argument("--status", action="store_true", help="read-only routes and settings; no sound or recording")
     mode.add_argument("--check-playback", action="store_true", help="15-second continuous tone; no microphone or server")
+    mode.add_argument("--check-voice", action="store_true", help="download a complete Piper WAV from Ubuntu and replay it twice")
     mode.add_argument("--play", type=Path, metavar="WAV", help="play a local PCM WAV using Marsi's actual speaker settings")
     mode.add_argument("--analyze", type=Path, metavar="WAV", help="inspect quiet spans in a local PCM WAV without playing it")
+    parser.add_argument("--text", help="Optional diagnostic text for --check-voice only")
     args = parser.parse_args()
+    if args.text is not None and not args.check_voice:
+        parser.error("--text requires --check-voice")
     try:
         load_env(args.env)
         if args.play or args.analyze:
@@ -379,6 +427,8 @@ def main():
             if args.play:
                 play(sample)
             passed = True
+        elif args.check_voice:
+            passed = check_voice(args.text)
         elif args.check_playback:
             passed = check_playback()
         elif args.check:

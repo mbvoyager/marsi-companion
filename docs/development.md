@@ -56,8 +56,12 @@ distinct `MARSI_SESSION` values for independent conversations.
 
 The shared token is for one trusted household, not separate user accounts.
 Anyone who has it can access any named session. Audio is not stored in the
-repository or database; microphone uploads remain in memory, and reply WAVs
-on the Pi use a temporary directory deleted after playback. SQLite deletion
+repository or database during ordinary conversation; microphone uploads remain
+in memory, and Linux reply playback uses an anonymous RAM file (`os.memfd_create`)
+inherited only by `aplay` through `pass_fds`. No SD-card WAV is written by this
+Linux playback path. The descriptor closes on success and handled failure;
+non-Linux development retains the cleaned temporary-directory fallback. Explicit
+`speech --synthesize PATH` diagnostics intentionally export a WAV. SQLite deletion
 removes records logically; it is not a forensic erase, and copies/backups remain.
 
 Memory provides continuity; it does not retrain Qwen or make Marsi self-learning.
@@ -81,6 +85,7 @@ use `Content-Type: application/json`. The only unauthenticated route is health.
 | `GET /v1/telemetry` | None | Numeric server readings and fresh Pi readings |
 | `POST /v1/telemetry` | `readings` object | Accept validated numeric Pi readings; return both machines |
 | `POST /v1/speak` | `session_id`, `entry_id`, `want_audio=true` | Read a persisted art/sermon/morning entry's spoken version |
+| `POST /v1/voice-check` | `session_id`, `want_audio=true`, optional `text` up to 300 characters | Piper diagnostic only; no Whisper, Qwen or journal writes |
 | `GET /v1/memory?session_id=pi` | Session in query | Explicit notes |
 | `POST /v1/memory` | `session_id`, `text` | Add explicit note |
 | `DELETE /v1/session` | `session_id` | Clear that session's journal, context, notes and schedule |
@@ -90,6 +95,16 @@ Chat text is capped at 2,000 characters. WAV uploads are capped at 2 MB and
 inference requests receive a retryable error. Telemetry/journal reads do not take
 the inference lock, so the display can refresh while Qwen works. This is a small LAN prototype,
 not a public internet service. No browser frontend or CORS is required.
+
+Spoken replies include `audio_base64` for the **complete** WAV and `audio_info`
+with `bytes` and `sha256`. The Pi checks supplied metadata before playback.
+The digest checks byte identity, not voice quality or transport authentication.
+Older servers without metadata remain usable for normal replies; the explicit
+`audio --check-voice` diagnostic requires metadata and replays one received
+buffer twice. It writes neither source audio nor test text to the journal.
+For the RAM-file and descriptor APIs, see
+[Python os.memfd_create](https://docs.python.org/3/library/os.html#os.memfd_create)
+and [subprocess pass_fds](https://docs.python.org/3/library/subprocess.html#subprocess.Popen).
 
 ## Verification
 
@@ -108,15 +123,19 @@ They also exercise journal migration and pagination, recall, numeric-only
 telemetry, persistent routine targets, missed mornings and daylight-saving changes.
 They do not benchmark real models. The script bot has its own separate test suite.
 
-On Linux, install `python3-tk` and `xvfb`, then run:
+On Linux, install `python3-tk`, `xvfb` and `alsa-utils`, then run:
 
 ```bash
 xvfb-run -a python3 -m tests.pi_display_smoke
+python3 -m unittest tests.audio_playback_smoke -v
 ```
 
 The GitHub workflow runs tests on Python 3.10 and 3.12 and includes the real Tk
 widget smoke test for both supported screen sizes, exact commands and F8 key
-repeat handling. A separate model-free decoder test installs speech requirements
+repeat handling. The playback smoke test hands real anonymous RAM WAVs to real
+`aplay` on ALSA's silent `null` device at 16, 22.05 and 48 kHz. It proves the
+descriptor hand-off and PCM handling, not physical speaker performance.
+A separate model-free decoder test installs speech requirements
 on Python 3.10, 3.12 and 3.14. Actual microphone, speaker and model inference still need the
 hardware acceptance sequence in the setup guides.
 

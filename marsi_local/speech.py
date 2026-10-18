@@ -14,6 +14,8 @@ from .core import ServiceError
 MAX_AUDIO_BYTES = 2_000_000
 MAX_AUDIO_SECONDS = 20
 LOG = logging.getLogger("marsi.local.speech")
+VOICE_CHECK_TEXT = ("Hello, little keeper. The machines are awake today. "
+                    "This is a test of my voice, with three short sentences.")
 
 
 def validate_wav(data: bytes) -> None:
@@ -142,10 +144,7 @@ def main():
         return
     if args.synthesize:
         from .audio import describe_wav
-        text = args.text if args.text is not None else (
-            "Hello, little keeper. The machines are awake today. "
-            "This is a test of my voice, with three short sentences."
-        )
+        text = args.text if args.text is not None else VOICE_CHECK_TEXT
         if not text.strip():
             parser.error("Synthesis text cannot be empty")
         audio = speech.synthesize(text)

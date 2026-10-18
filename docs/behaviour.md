@@ -146,6 +146,20 @@ hardware choice. He does not discover or control arbitrary devices.
 
 ## Conversation archive and learning
 
+Audio travels as complete WAV data. The Pi finishes a microphone recording in
+RAM before uploading it. On Ubuntu, Whisper converts it to text; Qwen receives
+that text and conversation context. Piper finishes a reply WAV in RAM before
+the server returns it. The Pi receives the whole reply, checks its byte count
+and checksum when supplied, then plays it. There is no word-by-word audio
+streaming in this flow.
+
+Normal input/output audio is not stored in the conversation database. Linux
+playback now uses an anonymous RAM file (`memfd`), which is closed after playback,
+instead of writing a WAV to the SD card. Non-Linux development uses a temporary
+directory cleaned after playback. Only an explicitly requested file diagnostic,
+such as `speech --synthesize PATH`, saves a WAV for later inspection. Models
+remain installed separately. See [audio diagnostics](audio-check.md).
+
 Successful conversations, recognized human speech, artworks, sermons and rituals
 are saved in `data/companion.sqlite3` on Ubuntu. The display reopens the latest
 80 entries and loads older pages on request. It keeps at most 600 loaded entries

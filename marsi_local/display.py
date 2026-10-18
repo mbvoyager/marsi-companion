@@ -1,7 +1,6 @@
 """A phosphor archive with original ASCII artwork and read-only machine cant."""
 from __future__ import annotations
 
-import base64
 from datetime import datetime
 import os
 from pathlib import Path
@@ -17,6 +16,7 @@ from .electoo import BONE, BRASS, Electoo
 from .telemetry import Telemetry, reading
 from .config import ROOT
 from .audio import CHECK_COMMAND
+from .audio_transfer import reply_audio
 
 
 class Display:
@@ -297,7 +297,7 @@ class Display:
             if speak and result.get("audio_base64"):
                 self.events.put(("speaking", None))
                 try:
-                    play(base64.b64decode(result["audio_base64"], validate=True), self.set_playback)
+                    play(reply_audio(result), self.set_playback)
                     if result.get("entry_id"):
                         self.events.put(("spoken", result["entry_id"]))
                 except (OSError, subprocess.SubprocessError, ValueError) as error:

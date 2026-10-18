@@ -22,6 +22,7 @@ from marsi_local.core import Companion, Memory, Ollama, ServiceError
 from marsi_local.server import Server
 from marsi_local.speech import Speech, validate_wav
 from marsi_local.speech import main as speech_main
+from marsi_local.audio_transfer import reply_audio
 
 
 def wav_bytes(seconds=0.1, channels=1, rate=16000):
@@ -177,6 +178,20 @@ class APITests(unittest.TestCase):
         self.assertEqual(result["heard"], "Hello Marsi")
         validate_wav(base64.b64decode(result["audio_base64"]))
         self.assertEqual(self.app.memory.context("pi")[0]["content"], "Hello Marsi")
+
+    def test_voice_check_preserves_private_memory_and_never_calls_qwen(self):
+        self.app.memory.remember_turn("pi", "A private synthetic observation", "A private synthetic reply")
+        self.app.memory.add_note("pi", "A synthetic preference")
+        before = self.app.memory.journal("pi")
+        with patch.object(self.app.llm, "chat", side_effect=AssertionError("Do not call Qwen")), \
+                patch.object(self.speech, "transcribe", side_effect=AssertionError("Do not use Whisper")):
+            result = self.client.check_voice("A diagnostic sentence.")
+        self.assertEqual(result["text"], "A diagnostic sentence.")
+        validate_wav(reply_audio(result, require_checksum=True))
+        self.assertEqual(self.app.memory.journal("pi"), before)
+        self.assertEqual(self.client.notes()["notes"], ["A synthetic preference"])
+        with self.assertRaisesRegex(ClientError, "token"):
+            Client(self.url).check_voice()
 
     def test_mute_skips_synthesis(self):
         before = self.speech.spoken

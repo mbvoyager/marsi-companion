@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import argparse
-import base64
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import hmac
 import json
@@ -14,8 +13,9 @@ from datetime import datetime
 from urllib.parse import parse_qs, urlsplit
 
 from .config import ServerConfig, load_env, validate_bind
+from .audio_transfer import attach_audio
 from .core import Companion, ServiceError, clean_text, ritual, session_name
-from .speech import MAX_AUDIO_BYTES, Speech
+from .speech import MAX_AUDIO_BYTES, Speech, VOICE_CHECK_TEXT
 
 LOG = logging.getLogger("marsi.local")
 
@@ -130,6 +130,7 @@ class Handler(BaseHTTPRequestHandler):
             if (method, path) not in (("POST", "/v1/chat"), ("POST", "/v1/voice"),
                                       ("POST", "/v1/ritual"), ("POST", "/v1/memory"),
                                       ("POST", "/v1/art"), ("POST", "/v1/sermon"), ("POST", "/v1/speak"),
+                                      ("POST", "/v1/voice-check"),
                                       ("DELETE", "/v1/session")):
                 raise ServiceError("Unknown endpoint.", 404)
             if path == "/v1/voice":
@@ -161,6 +162,10 @@ class Handler(BaseHTTPRequestHandler):
                     result["heard"] = text
                 elif path == "/v1/chat":
                     result = app.chat(session, clean_text(payload.get("text")))
+                elif path == "/v1/voice-check":
+                    # Diagnose actual speech without Qwen or a saved conversation.
+                    text = clean_text(payload.get("text", VOICE_CHECK_TEXT), 300)
+                    result = {"text": text, "source": "voice-check"}
                 elif path in ("/v1/art", "/v1/sermon"):
                     result = app.inscription(session, path.rsplit("/", 1)[1])
                 elif path == "/v1/speak":
@@ -179,7 +184,7 @@ class Handler(BaseHTTPRequestHandler):
                     app.memory.add_event(session, result)
                 if wants_audio:
                     try:
-                        result["audio_base64"] = base64.b64encode(app.speech.synthesize(result.get("spoken_text") or result["text"])).decode("ascii")
+                        attach_audio(result, app.speech.synthesize(result.get("spoken_text") or result["text"]))
                     except ServiceError as error:
                         result["voice_error"] = str(error)
                 self.respond(200, result)

@@ -56,7 +56,7 @@ class AudioTests(unittest.TestCase):
         callback = Mock()
         paths = []
         @contextmanager
-        def process(command, stdout, stderr, env):
+        def process(command, stdout, stderr, env, **options):
             self.assertEqual(command[:4], ["aplay", "-q", "-D", "pipewire"])
             self.assertIn("--buffer-time=1000000", command)
             self.assertIn("--period-time=100000", command)
@@ -77,7 +77,7 @@ class AudioTests(unittest.TestCase):
                           MARSI_PLAYBACK_BUFFER_MS="800", MARSI_PLAYBACK_PERIOD_MS="80")
         paths = []
         @contextmanager
-        def process(command, stdout, stderr, env):
+        def process(command, stdout, stderr, env, **options):
             paths.append(Path(command[-1]))
             self.assertIn("--buffer-time=800000", command)
             self.assertIn("--period-time=80000", command)

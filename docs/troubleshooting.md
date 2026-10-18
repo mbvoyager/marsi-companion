@@ -111,9 +111,12 @@ the display or changing Ubuntu's speech recognizer.
 For breaks during speech, use the
 [continuous tone and original-WAV comparison](audio-check.md#6-breaks-or-stuttering-during-speech).
 On the Pi, `.venv-pi/bin/python -m marsi_local.audio --check-playback` plays
-15 seconds without intended gaps. On Ubuntu,
+15 seconds without intended gaps. If tones pass, update both machines and run
+`.venv-pi/bin/python -m marsi_local.audio --check-voice` on the Pi. This receives
+a complete Piper WAV, verifies its checksum and replays it twice from RAM on
+Linux, without microphone capture, Qwen or saved journal entries. On Ubuntu,
 `.venv-server/bin/python -m marsi_local.speech --synthesize data/voice-check.wav`
-saves a Piper diagnostic without calling Qwen or changing the journal.
+saves an optional Piper diagnostic for inspection on another machine.
 
 Run these as Marsi's Pi user:
 
