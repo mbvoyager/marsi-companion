@@ -51,6 +51,9 @@ moment of delight with. His fictional character lives in
 [the personality scroll](marsi_local/personality.txt); his continuity comes from
 local conversation history, recalled context and notes you choose to save.
 No emoji pass the outer seal: his smallest smiles are `^^`, `:D` and `:P`.
+The vox covenant is English: his replies and voice remain in English, even
+when a transmission arrives in another tongue. A green/red targeting reticle
+marks the keeper's hand upon the terminal.
 
 ## Seal II · The Distributed Forge
 

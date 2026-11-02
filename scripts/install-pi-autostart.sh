@@ -38,11 +38,12 @@ if begin in original or end in original:
     start = original.index(begin)
     stop = original.index(end) + len(end)
     original = original[:start] + original[stop:].lstrip('\n')
-legacy = '''if [ -z "$DISPLAY" ] && [ "$(tty)" = /dev/tty1 ]; then
-    startx "$HOME/marsi-companion/deploy/marsi-xsession.sh" -- -nocursor
+for suffix in (' -- -nocursor', ''):
+    legacy = '''if [ -z "$DISPLAY" ] && [ "$(tty)" = /dev/tty1 ]; then
+    startx "$HOME/marsi-companion/deploy/marsi-xsession.sh"SUFFIX
 fi
-'''
-original = original.replace(legacy, '')
+'''.replace('SUFFIX', suffix)
+    original = original.replace(legacy, '')
 if 'marsi-xsession.sh' in original and 'startx' in original:
     raise SystemExit('A custom Marsi startup entry remains in ~/.profile; inspect it before installing another.')
 backup = profile.with_name('.profile.before-marsi')
@@ -50,14 +51,15 @@ if profile.exists() and not backup.exists():
     shutil.copy2(profile, backup)
 block = '''# BEGIN MARSI DISPLAY
 if [ -z "$DISPLAY" ] && [ "$(tty)" = /dev/tty1 ]; then
-    startx "$HOME/marsi-companion/deploy/marsi-xsession.sh" -- -nocursor
+    startx "$HOME/marsi-companion/deploy/marsi-xsession.sh"
 fi
 # END MARSI DISPLAY
 '''
 profile.write_text(original.rstrip() + '\n\n' + block)
 PY
         if ! "$autologin"; then
-            printf '%s\n' 'Startup entry installed. In sudo raspi-config choose Console Autologin, then reboot.'
+            printf '%s\n' 'Startup entry installed. Existing OS autologin settings were left unchanged.'
+            printf '%s\n' 'If needed, choose Console Autologin in sudo raspi-config; then reboot.'
         fi
         ;;
     --desktop)

@@ -34,6 +34,7 @@ class StartupTests(unittest.TestCase):
         self.assertIn("export EDITOR=nano", first)
         self.assertEqual(first.count("# BEGIN MARSI DISPLAY"), 1)
         self.assertIn('"$(tty)" = /dev/tty1', first)
+        self.assertNotIn('-nocursor', first)
         self.assertEqual((self.home / ".profile.before-marsi").read_text(), original)
 
     def test_exact_legacy_entry_is_replaced_without_duplicate_startx(self):
@@ -47,6 +48,24 @@ fi
         self.assertEqual(self.profile.read_text().count("startx "), 1)
         self.assertIn("# Existing setting", self.profile.read_text())
         self.assertEqual((self.home / ".profile.before-marsi").read_text(), old)
+
+    def test_managed_old_startup_is_migrated_and_other_settings_survive(self):
+        self.profile.write_text('# My settings\nexport EDITOR=nano\n# BEGIN MARSI DISPLAY\n'
+                                'if [ -z "$DISPLAY" ] && [ "$(tty)" = /dev/tty1 ]; then\n'
+                                '    startx "$HOME/marsi-companion/deploy/marsi-xsession.sh" -- -nocursor\n'
+                                'fi\n# END MARSI DISPLAY\n')
+        self.install()
+        result = self.profile.read_text()
+        self.assertIn('export EDITOR=nano', result)
+        self.assertNotIn('-nocursor', result)
+        self.assertEqual(result.count('startx '), 1)
+        self.assertIn('-nocursor', (self.home / '.profile.before-marsi').read_text())
+
+    def test_visible_legacy_startup_is_not_duplicated(self):
+        self.profile.write_text('if [ -z "$DISPLAY" ] && [ "$(tty)" = /dev/tty1 ]; then\n'
+                                '    startx "$HOME/marsi-companion/deploy/marsi-xsession.sh"\nfi\n')
+        self.install()
+        self.assertEqual(self.profile.read_text().count('startx '), 1)
 
     def test_custom_entry_and_malformed_markers_are_left_for_inspection(self):
         for original in ('startx ~/marsi-companion/deploy/marsi-xsession.sh -- :1\n',

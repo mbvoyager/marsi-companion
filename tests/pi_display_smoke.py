@@ -127,6 +127,14 @@ with tempfile.TemporaryDirectory() as state:
         root.withdraw()
         client = PreviewClient()
         display = Display(root, client, windowed=True)
+        assert display.pointer_cursor, "A mouse pointer must remain visible"
+        for widget in (root, display.input, display.reply, display.canvas, display.send, display.talk):
+            assert widget.cget("cursor") == display.pointer_cursor, "Use the reticle over text and controls too"
+        if root.tk.call("tk", "windowingsystem") == "x11":
+            assert str(display.pointer_cursor).startswith("@"), "X11 must load the custom bitmap rather than silently fall back"
+        future_button = tk.Button(root, text="Cursor inheritance")
+        assert future_button.cget("cursor") == display.pointer_cursor
+        future_button.destroy()
         root.geometry("800x480-20000+0")
         root.deiconify()
         readings = {"cpu_percent": 12, "load1": 0.42, "ram_used_mb": 220, "ram_total_mb": 920,

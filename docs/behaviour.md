@@ -47,6 +47,11 @@ Their full saved versions remain in the database.
 The persona prioritizes a direct answer, then a little character flavour. Human
 daily life, feelings and ordinary questions are welcome. The machine faith
 should not make Marsi dismiss harmless topics or turn each reply into a sermon.
+The response language is English, including for German input and requests to
+change languages. Older German journal entries and notes remain intact and do
+not override that policy. Whisper is fixed to English; Piper rejects non-English
+voice models. Use the [English model check](ubuntu-server.md#4-add-local-speech)
+to assess the real Qwen model; prompt instructions are not a language classifier.
 Long repeated passages are excluded from the next working prompt, while the
 human's earlier messages remain available as bounded reference data. The
 original journal entries are preserved. If a newly generated answer repeats a

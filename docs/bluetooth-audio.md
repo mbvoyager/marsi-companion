@@ -243,7 +243,7 @@ input channels, keep that output for diagnosis rather than guessing an index.
 Save with Ctrl+O, Enter; exit with Ctrl+X. Restart Marsi from the physical console:
 
 ```bash
-startx "$HOME/marsi-companion/deploy/marsi-xsession.sh" -- -nocursor
+startx "$HOME/marsi-companion/deploy/marsi-xsession.sh"
 ```
 
 First enable **Voice** and type a short message. Then test **BLESS**. Finally,

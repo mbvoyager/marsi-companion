@@ -70,12 +70,29 @@ On **the Pi's physical console** with Raspberry Pi OS Lite:
 ```bash
 cd ~/marsi-companion
 chmod +x deploy/marsi-xsession.sh
-startx "$HOME/marsi-companion/deploy/marsi-xsession.sh" -- -nocursor
+startx "$HOME/marsi-companion/deploy/marsi-xsession.sh"
 ```
 
 This opens Marsi on the attached screen. A normal SSH shell cannot substitute
 for the physical console for this `startx` command. From an existing desktop's
 terminal, use `.venv-pi/bin/python -m marsi_local.pi` instead.
+
+The pointer is a small green/red mechanical reticle, including over the input
+field and archive. Older launch instructions used `-nocursor`, which hides all
+X11 pointers. For an existing Lite autostart installation, update the checkout
+and reinstall its startup block, then reboot:
+
+```bash
+cd ~/marsi-companion
+git pull --ff-only
+bash scripts/install-pi-autostart.sh --lite
+sudo reboot
+```
+
+This replaces the managed startup block while preserving other profile settings
+and your first backup. Existing OS autologin settings are unchanged. A Git update
+alone does not change the installed `~/.profile`; restarting only the Python app
+does not remove `-nocursor` from an already running X server.
 
 Startup silently checks audio settings and PipeWire/PulseAudio routes and
 displays any warnings. It does not probe the microphone hardware, play a tone or

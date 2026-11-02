@@ -40,7 +40,7 @@ class ServerConfig:
     token: str = ""
     database: Path = ROOT / "data" / "companion.sqlite3"
     whisper_model: str = "tiny"
-    whisper_language: str | None = None
+    whisper_language: str = "en"
     piper_model: Path | None = None
     threads: int = 3
     timeout: float = 180.0
@@ -58,7 +58,9 @@ class ServerConfig:
             token=os.getenv("MARSI_TOKEN", ""),
             database=Path(os.getenv("MARSI_DATABASE", str(cls.database))).expanduser(),
             whisper_model=os.getenv("MARSI_WHISPER_MODEL", "tiny"),
-            whisper_language=os.getenv("MARSI_WHISPER_LANGUAGE") or None,
+            # This deployment is English-only, including existing .env files
+            # that previously selected German or automatic detection.
+            whisper_language="en",
             piper_model=Path(voice).expanduser() if voice else None,
             threads=int(os.getenv("MARSI_CPU_THREADS", "3")),
             timeout=float(os.getenv("MARSI_TIMEOUT", "180")),

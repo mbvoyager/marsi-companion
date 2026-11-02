@@ -70,6 +70,12 @@ These steps follow [Ubuntu's OpenSSH guide](https://ubuntu.com/server/docs/how-t
 
 ## Pi: display and boot
 
+A missing pointer in an older Lite setup can come from the old `-nocursor`
+startup option. After pulling the current Pi code, run
+`bash scripts/install-pi-autostart.sh --lite` as the usual user and reboot. This
+updates the managed profile block; it does not change audio settings or OS
+autologin. See the [pointer update steps](quickstart.md#3-start-the-display-manually).
+
 | Command | What it tells you or does |
 | --- | --- |
 | `pgrep -af 'marsi_local.pi'` | Is the display process running? |

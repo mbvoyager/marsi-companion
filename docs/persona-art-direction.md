@@ -26,6 +26,11 @@ Gold cog trim, breathing tubes and a collar seal preserve his Mechanicus identit
 Muted green identifies living signal and telemetry. Ivory keeps conversation
 readable. Red belongs to the forge, its bands and its controls.
 
+The mouse pointer is an original mechanical reticle: a green central aiming
+point and cardinal marks, oxide-red brackets, and transparent gaps. Its hotspot
+is the centre. Native X11 bitmap cursors keep it visible over the archive, input
+and buttons without adding animation or replacing normal mouse events.
+
 Ornament occupies the upper and lower friezes, the archive's edge and a substantial
 side effigy. The character breathes, blinks, shifts his gaze, leans towards the
 human's journal when listening and gently nods during speech. Shapes are cached

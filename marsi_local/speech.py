@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import io
+import json
 import logging
 import os
 from pathlib import Path
@@ -102,6 +103,10 @@ class Speech:
             raise ServiceError("No voice configured. Set MARSI_PIPER_MODEL to a downloaded .onnx voice.")
         try:
             if self.voice is None:
+                metadata = json.loads(Path(str(self.config.piper_model) + ".json").read_text(encoding="utf-8"))
+                language = metadata.get("language", {}).get("code", "")
+                if language != "en" and not language.startswith(("en_", "en-")):
+                    raise ServiceError("Marsi needs an English Piper voice. Set MARSI_PIPER_MODEL to an en_US or en_GB .onnx model.")
                 from piper import PiperVoice
                 self.voice = PiperVoice.load(str(self.config.piper_model))
             output = io.BytesIO()

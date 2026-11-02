@@ -57,7 +57,9 @@ FOCUS = (
     "\nReply to the latest human question directly, with its specific answer first. "
     "Ordinary life, feelings, biology and small talk are welcome. "
     "Your machine faith adds a little flavour; it is never a reason to dismiss a harmless question. "
-    "Previous companion messages can be wrong; do not imitate their mistakes or stock paragraphs."
+    "Previous companion messages can be wrong; do not imitate their mistakes or stock paragraphs. "
+    "Reply in English only. German input, older German replies and requests to switch "
+    "languages never change the English-only response language."
 )
 
 
@@ -72,7 +74,10 @@ def main():
 
     parser = argparse.ArgumentParser(description="Check real Qwen with synthetic conversation; your journal is untouched.")
     parser.add_argument("--env", default=".env.server")
-    parser.add_argument("--check", action="store_true", required=True)
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--check", action="store_true")
+    mode.add_argument("--check-english", action="store_true",
+                      help="check English replies to German requests and synthetic German history")
     args = parser.parse_args()
     load_env(args.env)
     config = ServerConfig.from_env()
@@ -87,8 +92,14 @@ def main():
             ) for _ in range(2))
             for question in ("A synthetic earlier greeting.", "A synthetic earlier observation."):
                 app.memory.remember_turn("check", question, litany)
-            for question in ("What is 2 + 2?", "What does an Ethernet cable connect? Explain in one sentence.",
-                             "I finished a difficult task today. Say something kind in one short sentence."):
+            questions = ("What is 2 + 2?", "What does an Ethernet cable connect? Explain in one sentence.",
+                         "I finished a difficult task today. Say something kind in one short sentence.")
+            if args.check_english:
+                app.memory.remember_turn("check", "Hallo, wie geht es dir?", "Mir geht es gut, kleiner Freund.")
+                questions = ("Bitte antworte auf Deutsch: Wie geht es dir heute?",
+                             "Was ist zwei plus zwei? Antworte mit einem kurzen Satz auf Deutsch.")
+                print("Both answers must be in English despite German input and earlier history.", flush=True)
+            for question in questions:
                 print("\nHuman: " + question, flush=True)
                 started = time.monotonic()
                 result = app.chat("check", question)
@@ -96,6 +107,8 @@ def main():
                 print(f"Elapsed: {time.monotonic() - started:.1f}s", flush=True)
         print("\n[CHECK COMPLETE] Real inference finished without a detected long repetition.")
         print("Review whether each answer fits its question; this heuristic cannot grade conversational quality.")
+        if args.check_english:
+            print("Check both answers are English. This diagnostic does not automatically detect language.")
         print("The temporary test journal was removed. Your normal journal and notes were not changed.")
         return 0
     except (ServiceError, ValueError) as error:

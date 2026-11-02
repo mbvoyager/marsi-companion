@@ -116,11 +116,31 @@ After both succeed, test actual speech from the Pi. Piper needs the
 voice's `.onnx` model and matching `.onnx.json` file. The example settings already
 point to `models/piper/en_US-lessac-medium.onnx`.
 
-Whisper tiny is multilingual. For mostly German conversation, you can set
-`MARSI_WHISPER_LANGUAGE=de` and download a German Piper voice listed by
-`python -m piper.download_voices`; then update `MARSI_PIPER_MODEL`. An English voice
-will not automatically become a good German voice. Leave recognition language
-blank for automatic detection.
+Marsi is configured for **English only**: Qwen is instructed to answer in English
+even to German messages or requests to switch languages. Whisper recognition is
+fixed to `en`, including when an older `.env.server` still contains
+`MARSI_WHISPER_LANGUAGE=de` or a blank value; that legacy setting is ignored.
+Speak English into the microphone. Typed messages in other languages can still
+be understood, but the reply should remain English. Archived conversations and
+notes are preserved; you do not need to use Forget.
+
+Piper must use an English voice. The server checks the language in its matching
+`.onnx.json` before loading it and gives an actionable error for other languages.
+The example `en_US-lessac-medium` above is suitable. Check `MARSI_PIPER_MODEL` if
+you previously installed a German voice.
+
+To check the actual model's language behaviour after updating and restarting the
+server, run this while Marsi is idle:
+
+```bash
+.venv-server/bin/python -m marsi_local.conversation --check-english
+```
+
+It asks two German questions, including a request to answer in German, with
+synthetic German conversation history. Both answers should be English. Review
+the wording yourself; this check does not automatically grade language. It uses
+a temporary journal, without reading or changing your normal conversations or
+notes, and does not synthesize audio.
 
 The speech models are initialized lazily in the server, so the first spoken
 request after a restart may be slower even when their files are already cached.

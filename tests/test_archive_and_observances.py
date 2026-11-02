@@ -70,15 +70,16 @@ class ArchiveTests(DatabaseFixture):
         self.memory.remember_turn("pi", "New", "New")
         self.assertGreater(self.memory.journal("pi")["entries"][0]["id"], previous)
 
-    def test_persona_enforces_ascii_expressions_and_preserves_language(self):
+    def test_persona_enforces_ascii_expressions_with_english_replies(self):
         llm = fixtures.FakeLLM()
-        llm.chat = Mock(return_value="Guten Morgen, müder Mensch! 😀 ⭐ ☕ ^^ :D")
+        llm.chat = Mock(return_value="Good morning, little keeper! 😀 ⭐ ☕ ^^ :D")
         app = Companion(ServerConfig(database=self.path), llm=llm)
         reply = app.chat("pi", "Hallo")["text"]
-        self.assertIn("müder Mensch", reply)
+        self.assertIn("Good morning", reply)
         self.assertIn("^^ :D", reply)
         self.assertNotIn("😀", reply)
         self.assertEqual(without_emoji("💚"), "")
+        self.assertIn("English only", llm.chat.call_args.args[0][0]["content"])
 
 
 class ObservanceTests(DatabaseFixture):

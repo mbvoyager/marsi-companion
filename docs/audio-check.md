@@ -300,13 +300,13 @@ a natural pause from a synthesis problem. The test calls neither Qwen nor
 Whisper, records no microphone and makes no journal entries. On Linux it writes
 no persistent audio file. It does not alter your sound routing.
 
-For a voice in another language, provide diagnostic wording explicitly:
+For different diagnostic wording, keep the text in English:
 
 ```bash
-.venv-pi/bin/python -m marsi_local.audio --check-voice --text "Hier spricht Marsi. Dies ist ein Test meiner Stimme."
+.venv-pi/bin/python -m marsi_local.audio --check-voice --text "Hello, little keeper. My circuits are awake. This is another voice test."
 ```
 
-Use text in your installed voice's language. If the server reports an unknown
+Marsi uses English recognition, replies and Piper voices. If the server reports an unknown
 endpoint or missing checksum, update and restart the Ubuntu service. This check
 needs the new server as well as the new Pi code. No new packages are needed.
 

@@ -105,11 +105,17 @@ From the Pi's local console on Lite:
 
 ```bash
 chmod +x deploy/marsi-xsession.sh
-startx "$HOME/marsi-companion/deploy/marsi-xsession.sh" -- -nocursor
+startx "$HOME/marsi-companion/deploy/marsi-xsession.sh"
 ```
 
 Run this on the physical console; `startx` over a normal SSH connection is not
 the same as launching a local graphical session.
+
+Marsi uses a green/red mechanical crosshair pointer on X11. If an older
+installation hides the pointer, [refresh the Lite startup block and reboot](quickstart.md#3-start-the-display-manually)
+to remove the old `-nocursor` option. The pointer uses the window system, with
+no extra animation or mouse polling; typing, text selection and clicks are
+unchanged. Windows/macOS development uses a standard visible crosshair.
 
 On an existing desktop, open a terminal in the project directory and run:
 

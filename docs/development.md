@@ -19,6 +19,7 @@ built, understood and repaired.
 | `marsi_local/personality.txt` | Marsi's conversational character |
 | `marsi_local/lore.py`, `lore.json` | Local canon reference and topic selection |
 | `marsi_local/electoo.py` | Cached circuitry, skull effigy and moving signals |
+| `marsi_local/pointer.py`, `marsi_local/assets/` | Native X11 reticle cursor and source/mask bitmaps |
 | `marsi_local/core.py` | Ollama, durable journal, working context, notes and recall |
 | `marsi_local/speech.py` | Optional Whisper/Piper loading and WAV validation |
 | `marsi_local/server.py` | Authenticated HTTP endpoints |

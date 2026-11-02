@@ -17,6 +17,7 @@ from .telemetry import Telemetry, reading
 from .config import ROOT
 from .audio import CHECK_COMMAND
 from .audio_transfer import reply_audio
+from .pointer import install_reticle
 
 
 class Display:
@@ -164,6 +165,7 @@ class Display:
                        "Mars reliquary -> near-side Terra\n"
                        "Bring me an observation, little keeper.\nType help for the local command cant.")
         self.resize()
+        self.pointer_cursor = install_reticle(root)
         self.input.focus_set()
         root.after(50, self.tick)
 
