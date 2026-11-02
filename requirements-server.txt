@@ -1,4 +1,5 @@
-# Optional voice support; the text server and demo need only Python 3.10+.
+# Text support plus optional local speech. The template demo needs only Python.
+-r requirements-text.txt
 faster-whisper>=1.2,<2
 # PyAV 19 removed metadata_errors, which faster-whisper's WAV decoder still uses.
 av>=11,<19

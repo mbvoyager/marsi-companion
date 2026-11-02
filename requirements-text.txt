@@ -1,0 +1,4 @@
+# Offline English/German output check, on Ubuntu only; no Pi dependency.
+# 2.2 adds Python 3.14 support and uses less RAM; older Python stays supported.
+lingua-language-detector==2.1.1; python_version < '3.12'
+lingua-language-detector==2.2.0; python_version >= '3.12'

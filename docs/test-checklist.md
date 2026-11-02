@@ -34,6 +34,11 @@ cd ~/marsi-companion
 - [ ] Type `For this test, my imaginary pet is a blue duck called Cogbert.`
       Then ask `What is my imaginary pet called?` Check recent conversation.
 - [ ] With **Voice** off, a typed reply appears without speaker playback.
+- [ ] On Ubuntu, run `.venv-server/bin/python -m marsi_local.conversation --check-english`.
+      Both answers should be English. `[REPAIR]` may precede a corrected answer;
+      a recovery notice must report `[FAILED]`, never a completed pass. In normal
+      conversation, this case stays in character with the English vox-cog notice
+      and optional speech, without displaying a technical language error.
 - [ ] Long replies remain readable by scrolling the text area.
 - [ ] Earlier human messages and Marsi replies remain visible, including after
       closing and reopening the display. OLDER TRANSMISSIONS loads an earlier

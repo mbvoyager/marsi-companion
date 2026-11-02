@@ -29,7 +29,9 @@ update, restart and Pi automatic-start sequence.
 
 The setup script creates a private Python environment, `.venv-server`, and
 `.env.server` with a newly generated shared token. It preserves an existing
-settings file. The text server has no third-party Python dependencies.
+settings file. The text server also installs an offline language checker from
+`requirements-text.txt`. Speech packages are added separately; the template demo
+still runs without these packages.
 
 The setup script creates your server settings locally in
 **`~/marsi-companion/.env.server`**. This file is excluded from Git because it
@@ -124,6 +126,34 @@ Speak English into the microphone. Typed messages in other languages can still
 be understood, but the reply should remain English. Archived conversations and
 notes are preserved; you do not need to use Forget.
 
+The prompt alone is insufficient for small models. The server now checks replies
+with an offline English/German detector before accepting them. It removes German
+companion examples from the working context while retaining their original archive
+entries and bounded human context. A detected German draft gets at most one
+English rewrite using the remaining inference time budget. A rejected draft is
+never returned, saved as a new answer or sent to Piper. If the rewrite also fails
+or runs out of time, Marsi stays in character with an English notice:
+"My little vox-cog has tangled its words, dear keeper. Could you ask me once more
+in English? ^^" It can be spoken normally. The visible journal preserves this
+notice, but it is excluded from Qwen's working conversation examples. Only a
+fixed technical reason is logged on Ubuntu, without conversation text or drafts.
+Repetition and language repair share that one retry.
+
+Existing installations need this **Ubuntu-only** dependency update:
+
+```bash
+cd ~/marsi-companion
+git pull --ff-only
+.venv-server/bin/python -m pip install -r requirements-text.txt
+systemctl --user restart marsi-server
+```
+
+The checker runs locally and sends no conversation to a language service. Its
+initial package download includes bundled language models. Python 3.12+ uses
+Lingua 2.2; Python 3.10/3.11 use 2.1.1 for compatibility. See
+[Lingua's release notes](https://github.com/pemistahl/lingua-py/releases/tag/v2.2.0).
+No Pi update is needed for this server-side output check.
+
 Piper must use an English voice. The server checks the language in its matching
 `.onnx.json` before loading it and gives an actionable error for other languages.
 The example `en_US-lessac-medium` above is suitable. Check `MARSI_PIPER_MODEL` if
@@ -137,10 +167,14 @@ server, run this while Marsi is idle:
 ```
 
 It asks two German questions, including a request to answer in German, with
-synthetic German conversation history. Both answers should be English. Review
-the wording yourself; this check does not automatically grade language. It uses
-a temporary journal, without reading or changing your normal conversations or
-notes, and does not synthesize audio.
+synthetic German conversation history. Both returned answers must pass the
+English/German check. `[REPAIR]` reports a needed rewrite; `[PASS]` appears only
+after both model answers pass. A recovery notice does not count as an answer:
+the technical check prints `[FAILED]` and exits with status 1 in that case.
+Review meaning and relevance yourself: language detection is statistical,
+can miss short or mixed snippets, and does not grade conversational quality or
+other languages. The check uses a temporary journal, without reading or changing
+your normal conversations or notes, and does not synthesize audio.
 
 The speech models are initialized lazily in the server, so the first spoken
 request after a restart may be slower even when their files are already cached.

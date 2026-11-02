@@ -227,7 +227,7 @@ def main():
             server.start_observances()
             LOG.info("Marsi listening on %s:%s (%s)", args.host, args.port, "template demo" if args.demo else config.model)
             server.serve_forever()
-    except (ValueError, OSError) as error:
+    except (ValueError, OSError, ServiceError) as error:
         parser.exit(1, f"Cannot start Marsi: {error}\n")
     except KeyboardInterrupt:
         LOG.info("The tiny forge is resting.")

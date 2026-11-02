@@ -23,6 +23,7 @@ from marsi_local.server import Server
 from marsi_local.speech import Speech, validate_wav
 from marsi_local.speech import main as speech_main
 from marsi_local.audio_transfer import reply_audio
+from marsi_local.language import ENGLISH_RECOVERY
 
 
 def wav_bytes(seconds=0.1, channels=1, rate=16000):
@@ -178,6 +179,33 @@ class APITests(unittest.TestCase):
         self.assertEqual(result["heard"], "Hello Marsi")
         validate_wav(base64.b64decode(result["audio_base64"]))
         self.assertEqual(self.app.memory.context("pi")[0]["content"], "Hello Marsi")
+
+    def test_german_output_is_rewritten_before_api_response_archive_or_speech(self):
+        before = self.speech.spoken
+        with patch.object(self.app.llm, "chat", side_effect=["Zwei plus zwei ist vier.", "Two plus two is four."]):
+            result = self.client.chat("A synthetic question.", speak=True)
+        self.assertEqual(result["text"], "Two plus two is four.")
+        self.assertTrue(result["language_repaired"])
+        self.assertEqual(self.speech.spoken, before + 1)
+        self.assertEqual(self.app.memory.journal("pi")["entries"][-1]["text"], result["text"])
+
+    def test_failed_language_repair_speaks_only_the_in_character_notice_for_typing_and_voice(self):
+        for voice in (False, True):
+            with self.subTest(voice=voice):
+                self.app.memory.forget("pi")
+                with patch.object(self.app.llm, "chat", return_value="Zwei plus zwei ist vier.") as chat, \
+                        patch.object(self.speech, "synthesize", wraps=self.speech.synthesize) as speak:
+                    result = (self.client.voice(wav_bytes()) if voice else
+                              self.client.chat("A synthetic question.", speak=True))
+                self.assertEqual(chat.call_count, 2)
+                self.assertEqual(result["source"], "language-recovery")
+                self.assertEqual(result["text"], ENGLISH_RECOVERY)
+                speak.assert_called_once_with(ENGLISH_RECOVERY)
+                validate_wav(reply_audio(result, require_checksum=True))
+                entries = self.app.memory.journal("pi")["entries"]
+                self.assertEqual(entries[-1]["text"], ENGLISH_RECOVERY)
+                self.assertNotIn("Zwei plus zwei ist vier.", [entry["text"] for entry in entries])
+                self.assertEqual(self.app.memory.context("pi"), [])
 
     def test_voice_check_preserves_private_memory_and_never_calls_qwen(self):
         self.app.memory.remember_turn("pi", "A private synthetic observation", "A private synthetic reply")

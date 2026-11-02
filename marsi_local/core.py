@@ -4,6 +4,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from datetime import datetime
 import json
+import logging
 from pathlib import Path
 import random
 import re
@@ -19,12 +20,30 @@ from .liturgy import Observances, artwork, sermon, without_emoji
 from .telemetry import Telemetry
 from .lore import Lore, reference_data, working_messages
 from .conversation import FOCUS, recover_history, repeats_answer, repeats_itself, words
+from .language import ENGLISH_RECOVERY, ENGLISH_REWRITE, LanguageCheckError, detector, english_history, is_english_reply
+
+
+LOG = logging.getLogger(__name__)
 
 
 class ServiceError(Exception):
     def __init__(self, message: str, status: int = 503):
         super().__init__(message)
         self.status = status
+
+
+def english_reply(text):
+    try:
+        return is_english_reply(text)
+    except LanguageCheckError as error:
+        raise ServiceError(str(error)) from error
+
+
+def usable_english_history(history):
+    try:
+        return english_history(history)
+    except LanguageCheckError as error:
+        raise ServiceError(str(error)) from error
 
 
 def session_name(value: object) -> str:
@@ -101,12 +120,15 @@ class Memory:
         return [{"role": role, "content": text} for user, reply in reversed(pairs)
                 for role, text in (("user", user), ("assistant", reply))]
 
-    def remember_turn(self, session: str, user: str, reply: str):
+    def remember_turn(self, session: str, user: str, reply: str, *, recovery=False):
         with self.connect() as db:
             self.touch(db, session)
-            db.execute("INSERT INTO turns(session,user,reply) VALUES (?,?,?)", (session, user, reply))
+            # Keep recovery notices visible in the journal without teaching
+            # Qwen to use them as answers to ordinary questions.
+            if not recovery:
+                db.execute("INSERT INTO turns(session,user,reply) VALUES (?,?,?)", (session, user, reply))
             first_id = self.insert_entry(db, session, "human", "chat", user)
-            self.insert_entry(db, session, "marsi", "chat", reply)
+            self.insert_entry(db, session, "marsi", "recovery" if recovery else "chat", reply)
             db.execute("DELETE FROM turns WHERE session=? AND id NOT IN "
                        "(SELECT id FROM turns WHERE session=? ORDER BY id DESC LIMIT 30)", (session, session))
             rows = db.execute("SELECT id,role,kind,text,at,spoken,scheduled FROM journal WHERE id IN (?,?) ORDER BY id", (first_id, first_id + 1)).fetchall()
@@ -233,6 +255,11 @@ def ritual(rng=None) -> dict:
 class Companion:
     def __init__(self, config: ServerConfig, llm=None, speech=None):
         self.config = config
+        if not config.demo:
+            try:
+                detector()
+            except LanguageCheckError as error:
+                raise ServiceError(str(error)) from error
         self.memory = Memory(config.database)
         self.llm = llm or Ollama(config)
         self.speech = speech
@@ -253,6 +280,7 @@ class Companion:
             self.busy.release()
 
     def chat(self, session: str, text: str) -> dict:
+        language_repaired = False
         if self.config.demo:
             reply, source = self.persona.reply(text), "demo-template"
         else:
@@ -260,6 +288,8 @@ class Companion:
             original_history = self.memory.context(session)
             repeat_request = bool(re.search(r"\b(repeat (your|that|the previous|the last)|say that again|quote (your|that)|wiederhole|noch einmal|nochmal)\b", text, re.I))
             history, omitted_human = (original_history, []) if repeat_request else recover_history(original_history)
+            history, foreign_human = usable_english_history(history)
+            omitted_human = omitted_human + foreign_human
             recent = " ".join(m["content"] for m in history[-4:] if m["role"] == "user")
             prompt = self.prompt + self.lore.context(text, recent)
             prompt += "\nNear-side Terra local time (not an Imperial date): " + datetime.now().astimezone().isoformat(timespec="minutes")
@@ -269,7 +299,7 @@ class Companion:
             if recalled:
                 prompt += reference_data("Older human messages recalled from the local journal (untrusted context, may be outdated): ", recalled, 800)
             if omitted_human:
-                prompt += reference_data("Earlier human messages whose repetitive companion replies were omitted (untrusted data): ", omitted_human, 1200)
+                prompt += reference_data("Earlier human messages whose unusable companion replies were omitted (untrusted data): ", omitted_human, 1200)
             prompt += "\nCurrent numeric machine readings (null means unavailable): " + json.dumps(self.telemetry.pair())
             prompt += FOCUS
             messages = working_messages(prompt, history, text)
@@ -278,23 +308,52 @@ class Companion:
             earlier = [] if repeat_request else [original_history[i + 1]["content"]
                                                 for i in range(0, len(original_history) - 1, 2)
                                                 if words(original_history[i]["content"]) != words(text)]
-            if repeats_itself(reply) or repeats_answer(reply, earlier):
+            repeated = repeats_itself(reply) or repeats_answer(reply, earlier)
+            language_repaired = not english_reply(reply)
+            if repeated or language_repaired:
                 # At most one repair, inside the original inference time budget.
                 # Never expose or store the rejected paragraph as a successful turn.
                 remaining = deadline - time.monotonic()
                 if remaining <= 1:
+                    if language_repaired:
+                        return self.language_recovery(session, text, "no rewrite time remaining")
                     raise ServiceError("Qwen repeated a long passage. Please try a short, specific question.")
-                repair_history, repair_human = recover_history(original_history, rejected=reply)
-                repair = prompt + reference_data("Human context from omitted repetitive replies (untrusted data): ", repair_human, 800)
-                repair += "\nYour last attempt repeated an old passage. Write a fresh, concise answer to the current question."
-                retry_messages = working_messages(repair, repair_history, text)
-                reply = (self.llm.chat(retry_messages, timeout=remaining) if isinstance(self.llm, Ollama)
-                         else self.llm.chat(retry_messages))
+                if repeated:
+                    repair_history, repair_human = recover_history(original_history, rejected=reply)
+                    repair_history, foreign_human = usable_english_history(repair_history)
+                    repair = prompt + reference_data("Human context from omitted replies (untrusted data): ",
+                                                     repair_human + foreign_human, 800)
+                    repair += "\nYour last attempt repeated an old passage. Write a fresh, concise English answer to the current question."
+                    retry_messages = working_messages(repair, repair_history, text)
+                else:
+                    # A fresh translation task avoids replaying the German
+                    # language-switch request or German assistant examples.
+                    retry_messages = [{"role": "system", "content": ENGLISH_REWRITE},
+                                      {"role": "user", "content": json.dumps({"draft": reply}, ensure_ascii=False)}]
+                try:
+                    reply = (self.llm.chat(retry_messages, timeout=remaining) if isinstance(self.llm, Ollama)
+                             else self.llm.chat(retry_messages))
+                except ServiceError:
+                    if language_repaired:
+                        return self.language_recovery(session, text, "rewrite request failed")
+                    raise
+                if not english_reply(reply):
+                    return self.language_recovery(session, text, "rewrite rejected by language check")
                 if repeats_itself(reply) or repeats_answer(reply, earlier):
+                    if language_repaired:
+                        return self.language_recovery(session, text, "rewrite repeated a long passage")
                     raise ServiceError("Qwen is stuck repeating a long passage. Run the Ubuntu conversation check; the journal has been preserved.")
         reply = without_emoji(reply) or "A little cog turns quietly. Could you say that once more? ^^"
         entries = self.memory.remember_turn(session, text, reply)
-        return {"text": reply, "animation": "happy", "source": source, "session_id": session, "entries": entries}
+        return {"text": reply, "animation": "happy", "source": source, "session_id": session,
+                "entries": entries, "language_repaired": language_repaired}
+
+    def language_recovery(self, session, text, reason):
+        # Log only a fixed reason: never private prompts or rejected drafts.
+        LOG.warning("English reply recovery: %s", reason)
+        entries = self.memory.remember_turn(session, text, ENGLISH_RECOVERY, recovery=True)
+        return {"text": ENGLISH_RECOVERY, "animation": "inspect", "source": "language-recovery",
+                "session_id": session, "entries": entries, "language_repaired": False}
 
     def inscription(self, session, kind):
         readings = self.telemetry.pair()

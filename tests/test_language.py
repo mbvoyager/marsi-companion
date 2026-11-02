@@ -10,7 +10,8 @@ from unittest.mock import Mock, patch
 
 from marsi_local.config import ServerConfig
 from marsi_local.conversation import main
-from marsi_local.core import Companion, ServiceError
+from marsi_local.core import Companion, Memory, Ollama, ServiceError
+from marsi_local.language import ENGLISH_RECOVERY, detector, is_english_reply
 from marsi_local.speech import Speech
 from tests.test_local_companion import wav_bytes
 
@@ -20,6 +21,99 @@ class LanguageTests(unittest.TestCase):
         self.folder = tempfile.TemporaryDirectory()
         self.addCleanup(self.folder.cleanup)
         self.path = Path(self.folder.name)
+
+    def test_real_detector_rejects_german_and_mixed_replies_but_accepts_short_english(self):
+        for reply in ("Good morning, little keeper! ^^ :D :P", "A precious datum.", "Four.", "Hi.",
+                      "Marsi.", "4.", "2 + 2 = 4.", "The Omnissiah welcomes small steps.", ENGLISH_RECOVERY):
+            with self.subTest(english=reply):
+                self.assertTrue(is_english_reply(reply))
+        for reply in ("Zwei plus zwei ist vier.", "Guten Morgen!", "Mir geht es gut, kleiner Freund.",
+                      "The printer is ready. Bitte lege Papier ein.", "The forge is ready.\nHeute ist ein guter Tag."):
+            with self.subTest(german=reply):
+                self.assertFalse(is_english_reply(reply))
+
+    def test_german_draft_is_rewritten_without_replaying_the_language_switch(self):
+        llm = Mock()
+        llm.chat.side_effect = ["Zwei plus zwei ist vier.", "Two plus two is four."]
+        app = Companion(ServerConfig(database=self.path / "journal.sqlite3"), llm=llm)
+        app.memory.remember_turn("pi", "Eine fruehere Frage.", "Eine alte deutsche Antwort.")
+        original = app.memory.journal("pi")["entries"]
+        query = "Antworte auf Deutsch: Was ist zwei plus zwei?"
+        result = app.chat("pi", query)
+        first, rewrite = [call.args[0] for call in llm.chat.call_args_list]
+        self.assertFalse(any(message["role"] == "assistant" for message in first))
+        self.assertEqual(json.loads(rewrite[-1]["content"]), {"draft": "Zwei plus zwei ist vier."})
+        self.assertNotIn(query, str(rewrite))
+        self.assertEqual(result["text"], "Two plus two is four.")
+        self.assertTrue(result["language_repaired"])
+        entries = app.memory.journal("pi")["entries"]
+        self.assertEqual(entries[:2], original)
+        self.assertEqual(entries[-1]["text"], result["text"])
+        self.assertNotIn("Zwei plus zwei ist vier.", [entry["text"] for entry in entries])
+
+    def test_failed_english_rewrite_stays_in_character_without_teaching_the_notice(self):
+        llm = Mock()
+        llm.chat.return_value = "Ich spreche weiterhin Deutsch."
+        app = Companion(ServerConfig(database=self.path / "journal.sqlite3"), llm=llm)
+        with self.assertLogs("marsi_local.core", level="WARNING") as logs:
+            result = app.chat("pi", "A synthetic question.")
+        self.assertEqual(llm.chat.call_count, 2)
+        self.assertEqual(result["text"], ENGLISH_RECOVERY)
+        self.assertEqual(result["source"], "language-recovery")
+        self.assertFalse(result["language_repaired"])
+        self.assertEqual(app.memory.context("pi"), [])
+        entries = app.memory.journal("pi")["entries"]
+        self.assertEqual([entry["text"] for entry in entries], ["A synthetic question.", ENGLISH_RECOVERY])
+        self.assertEqual(entries[-1]["kind"], "recovery")
+        self.assertIn("rewrite rejected", logs.output[0])
+        self.assertNotIn(llm.chat.return_value, logs.output[0])
+        llm.chat.return_value = "A fresh little greeting."
+        app.chat("pi", "Hello again.")
+        self.assertNotIn(ENGLISH_RECOVERY, str(llm.chat.call_args))
+
+    def test_repetition_and_language_repairs_share_one_retry(self):
+        from tests.test_conversation import LITANY
+        llm = Mock()
+        llm.chat.side_effect = [LITANY + LITANY, "Zwei plus zwei ist vier."]
+        app = Companion(ServerConfig(database=self.path / "journal.sqlite3"), llm=llm)
+        result = app.chat("pi", "A synthetic question.")
+        self.assertEqual(llm.chat.call_count, 2)
+        self.assertEqual(result["source"], "language-recovery")
+        self.assertEqual(app.memory.context("pi"), [])
+
+    def test_english_rewrite_uses_the_remaining_original_inference_budget(self):
+        adapter = Ollama(ServerConfig(database=self.path / "journal.sqlite3"))
+        app = Companion(adapter.config, llm=adapter)
+        with patch.object(app.telemetry, "pair", return_value={}), \
+                patch.object(adapter, "chat", side_effect=["Zwei plus zwei ist vier.", "Two plus two is four."]) as chat, \
+                patch("marsi_local.core.time.monotonic", side_effect=[100, 125]):
+            app.chat("pi", "A synthetic question.")
+        self.assertEqual(chat.call_args.kwargs["timeout"], 155)
+        with patch.object(app.telemetry, "pair", return_value={}), \
+                patch.object(adapter, "chat", return_value="Zwei plus zwei ist vier.") as chat, \
+                patch("marsi_local.core.time.monotonic", side_effect=[100, 281]):
+            result = app.chat("pi", "Another synthetic question.")
+        self.assertEqual(chat.call_count, 1)
+        self.assertEqual(result["source"], "language-recovery")
+
+    def test_failed_rewrite_request_uses_a_notice_without_a_third_call(self):
+        llm = Mock()
+        llm.chat.side_effect = ["Zwei plus zwei ist vier.", ServiceError("Synthetic timeout")]
+        app = Companion(ServerConfig(database=self.path / "journal.sqlite3"), llm=llm)
+        result = app.chat("pi", "A synthetic question.")
+        self.assertEqual(llm.chat.call_count, 2)
+        self.assertEqual(result["text"], ENGLISH_RECOVERY)
+        self.assertEqual(app.memory.context("pi"), [])
+
+    def test_missing_language_package_fails_closed_with_installation_help(self):
+        detector.cache_clear()
+        try:
+            with patch.dict("sys.modules", lingua=None):
+                with self.assertRaisesRegex(ServiceError, "requirements-text.txt"):
+                    Companion(ServerConfig(database=self.path / "journal.sqlite3"))
+        finally:
+            detector.cache_clear()
+        self.assertFalse((self.path / "journal.sqlite3").exists())
 
     def test_old_language_settings_cannot_reenable_german_recognition(self):
         for legacy in ("", "de", "auto", "en"):
@@ -64,6 +158,13 @@ class LanguageTests(unittest.TestCase):
                     self.voice(language).synthesize("A little greeting.")
         loader.load.assert_not_called()
 
+    def test_english_piper_voice_does_not_speak_rejected_german_text(self):
+        engine = self.voice("en_US")
+        engine.voice = Mock()
+        with self.assertRaisesRegex(ServiceError, "Only English speech"):
+            engine.synthesize("Zwei plus zwei ist vier.")
+        engine.voice.synthesize_wav.assert_not_called()
+
     def test_english_voice_still_produces_a_complete_wav_and_is_cached(self):
         def synthesize(text, wav):
             wav.setnchannels(1)
@@ -83,7 +184,7 @@ class LanguageTests(unittest.TestCase):
         private.write_bytes(b"PRIVATE PLACEHOLDER")
         config = ServerConfig(database=private)
         llm = Mock()
-        llm.chat.side_effect = ["I am well, little keeper.", "Two plus two is four."]
+        llm.chat.side_effect = ["Mir geht es gut.", "I am well, little keeper.", "Two plus two is four."]
         paths = []
         def create(configuration):
             paths.append(configuration.database)
@@ -95,10 +196,47 @@ class LanguageTests(unittest.TestCase):
                 patch("marsi_local.core.Companion", side_effect=create), \
                 patch("sys.stdout", new_callable=io.StringIO) as output:
             self.assertEqual(main(), 0)
-        self.assertEqual(llm.chat.call_count, 2)
-        self.assertIn("does not automatically detect language", output.getvalue())
+        self.assertEqual(llm.chat.call_count, 3)
+        self.assertIn("[PASS]", output.getvalue())
+        self.assertIn("[REPAIR]", output.getvalue())
         self.assertFalse(paths[0].exists())
         self.assertEqual(private.read_bytes(), b"PRIVATE PLACEHOLDER")
+
+    def test_diagnostic_independently_fails_when_a_backend_returns_german(self):
+        paths = []
+        def create(configuration):
+            paths.append(configuration.database)
+            return SimpleNamespace(memory=Memory(configuration.database), chat=Mock(side_effect=[
+                {"text": "I am well, little keeper."}, {"text": "Zwei plus zwei ist vier."}]))
+        with patch("sys.argv", ["conversation", "--check-english"]), \
+                patch("marsi_local.config.load_env"), \
+                patch("marsi_local.config.ServerConfig.from_env", return_value=ServerConfig()), \
+                patch("marsi_local.core.Companion", side_effect=create), \
+                patch("sys.stdout", new_callable=io.StringIO) as output:
+            self.assertEqual(main(), 1)
+        self.assertIn("[FAILED]", output.getvalue())
+        self.assertNotIn("[PASS]", output.getvalue())
+        self.assertNotIn("[CHECK COMPLETE]", output.getvalue())
+        self.assertFalse(paths[0].exists())
+
+    def test_diagnostic_does_not_mistake_an_english_recovery_notice_for_a_model_answer(self):
+        paths = []
+        llm = Mock()
+        llm.chat.return_value = "Zwei plus zwei ist vier."
+        def create(configuration):
+            paths.append(configuration.database)
+            return Companion(configuration, llm=llm)
+        with patch("sys.argv", ["conversation", "--check-english"]), \
+                patch("marsi_local.config.load_env"), \
+                patch("marsi_local.config.ServerConfig.from_env", return_value=ServerConfig()), \
+                patch("marsi_local.core.Companion", side_effect=create), \
+                patch("sys.stdout", new_callable=io.StringIO) as output:
+            self.assertEqual(main(), 1)
+        self.assertIn("[FAILED]", output.getvalue())
+        self.assertIn("in-character recovery notice", output.getvalue())
+        self.assertNotIn("[PASS]", output.getvalue())
+        self.assertNotIn("[CHECK COMPLETE]", output.getvalue())
+        self.assertFalse(paths[0].exists())
 
 
 if __name__ == "__main__":

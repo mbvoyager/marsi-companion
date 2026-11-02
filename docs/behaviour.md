@@ -49,9 +49,25 @@ daily life, feelings and ordinary questions are welcome. The machine faith
 should not make Marsi dismiss harmless topics or turn each reply into a sermon.
 The response language is English, including for German input and requests to
 change languages. Older German journal entries and notes remain intact and do
-not override that policy. Whisper is fixed to English; Piper rejects non-English
-voice models. Use the [English model check](ubuntu-server.md#4-add-local-speech)
-to assess the real Qwen model; prompt instructions are not a language classifier.
+not override that policy. German companion examples are omitted from working
+context. An offline Lingua English/German check inspects the whole generated reply
+and individual sentences. A rejected answer gets one English rewrite before it
+can reach the API, new journal entries or speech. If the rewrite fails or runs out
+of time, Marsi gives a short, predefined English notice in character:
+"My little vox-cog has tangled its words, dear keeper. Could you ask me once more
+in English? ^^" It is displayed and can be spoken as usual. Its journal entry
+is marked `recovery`, and it is not added to Qwen's working examples. Rejected
+drafts are not saved. Technical logs record a fixed reason without private text.
+This shares the original inference deadline and one retry with repetition repair;
+there is no unbounded retry loop.
+Whisper is fixed to English. Piper rejects non-English voice models and applies
+the same text check before synthesis, including explicit voice diagnostics.
+Install `requirements-text.txt` on Ubuntu and use the
+[English model check](ubuntu-server.md#4-add-local-speech). It reports `[REPAIR]`
+when a rewrite was necessary, exits nonzero when a recovery notice replaces an
+answer and prints `[PASS]` only after both model answers pass. This statistical English/German
+check can misclassify short, mixed or unusual text and does not verify grammar,
+meaning or other languages. It is an additional guard, not a formal language proof.
 Long repeated passages are excluded from the next working prompt, while the
 human's earlier messages remain available as bounded reference data. The
 original journal entries are preserved. If a newly generated answer repeats a

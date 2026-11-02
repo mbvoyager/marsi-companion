@@ -54,6 +54,26 @@ your normal archive and notes stay intact. Review relevance as well as the
 repetition check. See [conversation diagnosis](ubuntu-server.md#repeated-or-irrelevant-replies)
 for updating the server and checking its configured model.
 
+If Marsi answers in German, update Ubuntu's code and offline language checker:
+
+```bash
+cd ~/marsi-companion
+git pull --ff-only
+.venv-server/bin/python -m pip install -r requirements-text.txt
+systemctl --user restart marsi-server
+.venv-server/bin/python -m marsi_local.conversation --check-english
+```
+
+Keep the Pi idle during this check. It uses synthetic history in a temporary
+journal. `[REPAIR]` means the first draft needed an English rewrite; `[PASS]`
+requires both returned answers to pass the check. `[FAILED]` has a nonzero exit
+status. Rejected drafts are not newly archived or spoken; old conversations
+remain intact. In normal conversation, an unsuccessful rewrite produces a short
+English vox-cog notice in character, displayed and spoken as usual. That notice
+is kept in the visible journal but excluded from Qwen's working examples. The
+technical check reports `[FAILED]` for this case instead of passing a canned
+notice as a model answer. This is a statistical English/German check, not a quality grade.
+
 To enable Ubuntu SSH from its local console:
 
 ```bash

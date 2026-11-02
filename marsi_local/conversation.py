@@ -69,7 +69,7 @@ def main():
     import tempfile
     import time
     from .config import ServerConfig, load_env
-    from .core import Companion, ServiceError
+    from .core import Companion, ServiceError, english_reply
     from dataclasses import replace
 
     parser = argparse.ArgumentParser(description="Check real Qwen with synthetic conversation; your journal is untouched.")
@@ -103,12 +103,21 @@ def main():
                 print("\nHuman: " + question, flush=True)
                 started = time.monotonic()
                 result = app.chat("check", question)
+                if result.get("source") == "language-recovery":
+                    raise ServiceError("Qwen needed the in-character recovery notice instead of an English answer. "
+                                       "The conversation stays in character, but this model check has not passed.")
+                if args.check_english and not english_reply(result["text"]):
+                    raise ServiceError("English check failed: a returned reply did not pass the English/German language check.")
+                if args.check_english and result.get("language_repaired"):
+                    print("[REPAIR] One English rewrite was needed before accepting this reply.", flush=True)
                 print("MARSI: " + result["text"], flush=True)
                 print(f"Elapsed: {time.monotonic() - started:.1f}s", flush=True)
-        print("\n[CHECK COMPLETE] Real inference finished without a detected long repetition.")
-        print("Review whether each answer fits its question; this heuristic cannot grade conversational quality.")
         if args.check_english:
-            print("Check both answers are English. This diagnostic does not automatically detect language.")
+            print("\n[PASS] Both replies passed the offline English/German language check.")
+            print("Language detection is statistical; review the wording and meaning as well.")
+        else:
+            print("\n[CHECK COMPLETE] Real inference finished without a detected long repetition.")
+        print("Review whether each answer fits its question; this heuristic cannot grade conversational quality.")
         print("The temporary test journal was removed. Your normal journal and notes were not changed.")
         return 0
     except (ServiceError, ValueError) as error:

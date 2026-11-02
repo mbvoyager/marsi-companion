@@ -16,6 +16,7 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '${{ matrix.python }}'
+      - run: python -m pip install -r requirements-text.txt
       - run: python -m unittest discover -s tests -v
       - run: python -m compileall -q marsi_local
       - run: for script in scripts/*.sh deploy/marsi-xsession.sh; do bash -n "$script"; done
@@ -37,4 +38,4 @@ jobs:
           python-version: '${{ matrix.python }}'
       - run: python -m pip install -r requirements-server.txt
       - run: python -m pip check
-      - run: python -m unittest tests.speech_decoder_smoke -v
+      - run: python -m unittest tests.speech_decoder_smoke tests.test_language -v

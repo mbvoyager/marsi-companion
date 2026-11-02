@@ -3,7 +3,9 @@ set -euo pipefail
 cd -- "$(dirname -- "$0")/.."
 python3 -m venv .venv-server
 .venv-server/bin/python -m pip install --upgrade pip
-if [[ "${1:-}" != "--text-only" ]]; then
+if [[ "${1:-}" == "--text-only" ]]; then
+    .venv-server/bin/python -m pip install -r requirements-text.txt
+else
     .venv-server/bin/python -m pip install -r requirements-server.txt
 fi
 if [[ ! -f .env.server ]]; then

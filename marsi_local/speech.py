@@ -10,7 +10,7 @@ from pathlib import Path
 import wave
 
 from .config import ServerConfig, ROOT, load_env
-from .core import ServiceError
+from .core import ServiceError, english_reply
 
 MAX_AUDIO_BYTES = 2_000_000
 MAX_AUDIO_SECONDS = 20
@@ -101,6 +101,8 @@ class Speech:
     def synthesize(self, text: str) -> bytes:
         if not self.config.piper_model:
             raise ServiceError("No voice configured. Set MARSI_PIPER_MODEL to a downloaded .onnx voice.")
+        if not english_reply(text):
+            raise ServiceError("Only English speech is enabled. The language check rejected this text.")
         try:
             if self.voice is None:
                 metadata = json.loads(Path(str(self.config.piper_model) + ".json").read_text(encoding="utf-8"))

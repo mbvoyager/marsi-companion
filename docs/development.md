@@ -17,6 +17,7 @@ built, understood and repaired.
 | --- | --- |
 | `marsi_local/demo.py` | Authored companion replies for no-model rehearsal |
 | `marsi_local/personality.txt` | Marsi's conversational character |
+| `marsi_local/language.py` | Offline English/German reply gate and context filtering |
 | `marsi_local/lore.py`, `lore.json` | Local canon reference and topic selection |
 | `marsi_local/electoo.py` | Cached circuitry, skull effigy and moving signals |
 | `marsi_local/pointer.py`, `marsi_local/assets/` | Native X11 reticle cursor and source/mask bitmaps |
@@ -112,8 +113,10 @@ and [subprocess pass_fds](https://docs.python.org/3/library/subprocess.html#subp
 From the checkout:
 
 ```bash
-python3 -m unittest discover -s tests -v
-python3 -m compileall -q marsi_local
+python3 -m venv .venv-tests
+.venv-tests/bin/python -m pip install -r requirements-text.txt
+.venv-tests/bin/python -m unittest discover -s tests -v
+.venv-tests/bin/python -m compileall -q marsi_local
 for script in scripts/*.sh deploy/marsi-xsession.sh; do bash -n "$script"; done
 ```
 
@@ -123,12 +126,21 @@ forgetting, busy handling, WAV limits, speech failure behaviour and quiet hours.
 They also exercise journal migration and pagination, recall, numeric-only
 telemetry, persistent routine targets, missed mornings and daylight-saving changes.
 They do not benchmark real models. The script bot has its own separate test suite.
+Language tests use the real offline detector with synthetic German/English text.
+They cover bounded rewrites, unchanged old archives, rejecting failed drafts
+before synthesis, missing-dependency errors and a diagnostic that fails for a
+German backend answer or a recovery notice. `language_repaired` is an API
+diagnostic boolean; ordinary conversation keeps its `qwen` source label after a
+successful rewrite. If repair cannot produce a usable English answer, a fixed
+in-character notice uses source `language-recovery` and `language_repaired=false`.
+This notice supports ordinary speech and journal display, but is excluded from
+the `turns` working context. Only a fixed reason is logged, never draft text.
 
 On Linux, install `python3-tk`, `xvfb` and `alsa-utils`, then run:
 
 ```bash
-xvfb-run -a python3 -m tests.pi_display_smoke
-python3 -m unittest tests.audio_playback_smoke -v
+xvfb-run -a .venv-tests/bin/python -m tests.pi_display_smoke
+.venv-tests/bin/python -m unittest tests.audio_playback_smoke -v
 ```
 
 The GitHub workflow runs tests on Python 3.10 and 3.12 and includes the real Tk
@@ -136,7 +148,7 @@ widget smoke test for both supported screen sizes, exact commands and F8 key
 repeat handling. The playback smoke test hands real anonymous RAM WAVs to real
 `aplay` on ALSA's silent `null` device at 16, 22.05 and 48 kHz. It proves the
 descriptor hand-off and PCM handling, not physical speaker performance.
-A separate model-free decoder test installs speech requirements
+A separate model-free decoder/language test installs speech requirements
 on Python 3.10, 3.12 and 3.14. Actual microphone, speaker and model inference still need the
 hardware acceptance sequence in the setup guides.
 
