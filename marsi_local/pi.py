@@ -8,6 +8,7 @@ import threading
 from .client import Client
 from .config import load_env
 from .audio import inspect_audio, play, record
+from .screen import ScreenAwake
 
 
 # Preserve the public Display import used by existing callers.
@@ -27,8 +28,12 @@ def main():
         return
     import tkinter as tk
     root = tk.Tk()
+    screen = ScreenAwake()
     try:
         display = Display(root, Client.from_env(), windowed=args.windowed)
+        screen_warning = screen.start(root.tk.call("tk", "windowingsystem"))
+        if screen_warning:
+            display.show_text(screen_warning)
         # Startup checks routes only: PortAudio's hardware enumeration can open
         # USB devices even without recording. Defer it until Talk or --check.
         def readiness():
@@ -43,6 +48,8 @@ def main():
         parser.exit(1, f"Cannot open Marsi: {error}\n")
     except KeyboardInterrupt:
         display.close()
+    finally:
+        screen.close()
 
 
 if __name__ == "__main__":

@@ -100,6 +100,9 @@ record a sample; use the manual check above to verify actual sound. Typed
 conversation stays available if audio is missing.
 
 - Type a sentence and press Enter or SEND.
+- Your line appears immediately with an ASCII `ESTIMATE` bar. It adjusts to
+  recent response times and disappears when the reply arrives. A slow answer
+  stays below 100% with `a longer thought`; it is not a real server percentage.
 - Press **F8** or TALK, speak, then press **F8** or FINISH. F8 works while the
   display has keyboard focus; it is not a system-wide shortcut.
 - Type `art`, `sermon`, `bless`, `help`, or `exit`. A leading slash also works.
@@ -112,6 +115,12 @@ conversation stays available if audio is missing.
 Both typed messages and recognized speech enter the server journal. Readings
 refresh about every ten seconds. An unavailable temperature sensor shows `--`.
 The first CPU percentage also shows `--` until two samples have been taken.
+
+Marsi keeps the Lite/X11 screen awake while running and restores its earlier
+screen-saver settings on normal exit. Existing Pi installations need the small
+system utility `sudo apt install -y x11-xserver-utils`, followed by reopening
+Marsi. See [screen-awake setup and checks](raspberry-pi.md#keep-the-screen-awake)
+for the complete update commands and Wayland desktop settings.
 
 ## 4. Make the Lite Pi start automatically
 

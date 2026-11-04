@@ -21,7 +21,7 @@ On the Pi, through SSH or its console:
 
 ```bash
 sudo apt update
-sudo apt install -y git nano python3 python3-venv python3-tk libportaudio2 alsa-utils
+sudo apt install -y git nano python3 python3-venv python3-tk libportaudio2 alsa-utils x11-xserver-utils
 # For Lite only: add a small graphical session.
 sudo apt install -y xserver-xorg xinit openbox
 cd ~
@@ -129,6 +129,19 @@ it. Use `--windowed` during development. Both sides of conversations remain in
 the scrollable journal; OLDER TRANSMISSIONS loads earlier pages. The display
 supports 800×480 and 480×320, with smaller lettering on the smaller screen.
 
+Your typed message appears immediately, with an ASCII progress bar underneath.
+`ESTIMATE` means a timing guess, not measured model progress. The first guess is
+rough; Marsi adjusts it using the last five completed requests of each kind in
+this display session. Voice and text have separate timings. If a reply takes
+longer, the bar waits below 100% and says `a longer thought`. It disappears as
+soon as the response arrives, before speaker playback finishes. The confirmed
+server entry replaces your provisional line without repeating it in the chat.
+
+After F8/FINISH, a sealed-recording notice appears with the same estimated
+progress. The recognized words replace that notice when Ubuntu returns them.
+If the connection fails, your typed words remain locally marked `UNSEALED`;
+there is no automatic resend. The server journal remains the durable archive.
+
 Startup silently checks audio settings and PipeWire/PulseAudio routes and adds
 any warnings to the local terminal view; typed conversation remains available.
 It does not probe the microphone hardware, play a test tone or record you.
@@ -152,6 +165,47 @@ re-pairing a Bluetooth device that already records and plays sound successfully.
 
 Use the [feature test checklist](test-checklist.md) to work through conversation,
 speech, notes, rituals, connection recovery and startup on your actual hardware.
+
+### Keep the screen awake
+
+On the recommended Lite/X11 setup, Marsi disables X11's screen saver and display
+power timeout while the app runs. This also applies when starting the Python
+app directly in an X11 desktop. Normal exit restores the earlier settings;
+no permanent OS setting is edited and no keep-awake polling process is added.
+The `xset` utility comes from `x11-xserver-utils`, installed in step 1.
+These are the [X.Org screen-saver and DPMS controls](https://xorg.freedesktop.org/releases/X11R7.5/doc/man/man1/xset.1.html).
+
+For an existing Pi installation, update **on the Pi**:
+
+```bash
+cd ~/marsi-companion
+git pull --ff-only
+sudo apt update
+sudo apt install -y x11-xserver-utils
+sudo reboot
+```
+
+With autostart already installed, Marsi opens with these changes after the
+reboot. Alternatively, close Marsi and open it again. This display update does
+not require changes on Ubuntu.
+
+To check from SSH while Marsi is open, log in as the same Pi user and run:
+
+```bash
+DISPLAY=:0 xset q
+```
+
+`Screen Saver` should show `timeout: 0`. `DPMS` should be disabled if the X server
+supports it; a report that the extension is unavailable is also normal. If the
+session uses a different display number, use that number instead of `:0`.
+If access is denied, run `xset q` in a terminal inside the graphical session.
+
+A full Wayland desktop manages its own idle policy; Marsi shows a `LUMEN`
+notice there rather than claiming Xwayland can hold the monitor awake. Disable
+Screen Blanking in the desktop's display settings, as described in the
+[official Raspberry Pi guide](https://www.raspberrypi.com/documentation/computers/configuration.html#configure-screen-blanking).
+If an X11 screen still turns off with timeout zero and DPMS disabled, check the
+monitor's own sleep/eco timer or any separately installed screen-locking utility.
 
 ## 4. Routines and automatic startup
 

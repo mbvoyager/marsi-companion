@@ -18,6 +18,7 @@ from .config import ROOT
 from .audio import CHECK_COMMAND
 from .audio_transfer import reply_audio
 from .pointer import install_reticle
+from .transmission import ResponseTimes, Transmission
 
 
 class Display:
@@ -41,6 +42,9 @@ class Display:
         self.local = Telemetry()
         self.readings = {"pi": None, "server": None}
         self.pending_spoken = None
+        self.pending = self.deferred_archive = None
+        self.response_times = ResponseTimes()
+        self.last_progress = ""
         state_dir = Path(os.getenv("MARSI_PI_STATE_DIR", str(ROOT / "data")))
         self.voice_marker = state_dir / ("pi-voice-" + client.session + ".txt")
         try:
@@ -240,6 +244,7 @@ class Display:
             for key in keep:
                 entry = self.entries[key]
                 self.reply.insert("end", self.formatted(entry), entry["role"])
+            self.insert_pending()
         self.reply.configure(state="disabled")
         if (bottom or initial) and not older:
             self.reply.see("end")
@@ -250,6 +255,9 @@ class Display:
         self.polling = True
         generation, cursor, before = self.generation, self.cursor, self.before
         initial = not self.restored
+        # Readings still refresh while waiting. Defer journal changes until the
+        # request resolves so the provisional human line cannot be duplicated.
+        read_journal = self.pending is None
         def collect():
             try:
                 if older:
@@ -260,8 +268,9 @@ class Display:
                     self.events.put(("local", local))
                     readings = self.client.telemetry(local)
                     self.events.put(("telemetry", readings))
-                    page = self.client.journal(after=cursor)
-                    self.events.put(("archive", (generation, page, False, initial)))
+                    if read_journal:
+                        page = self.client.journal(after=cursor)
+                        self.events.put(("archive", (generation, page, False, initial)))
             except (ClientError, ValueError):
                 self.events.put(("offline", None))
             finally:
@@ -288,8 +297,93 @@ class Display:
         self.restored = self.has_more = False
         self.reply.configure(state="normal")
         self.reply.delete("1.0", "end")
+        self.insert_pending()
         self.reply.configure(state="disabled")
         self.last_poll = 0
+
+    def delete_tagged(self, tag):
+        ranges = self.reply.tag_ranges(tag)
+        for offset in range(len(ranges) - 2, -1, -2):
+            self.reply.delete(ranges[offset], ranges[offset + 1])
+
+    def insert_pending(self):
+        """Called with Text writable, also after a bounded archive redraw."""
+        if self.pending is None:
+            return
+        if self.pending.text is not None:
+            self.reply.insert("end", self.formatted({"at": self.pending.at, "kind": "chat",
+                              "role": "human", "text": self.pending.text}), ("human", "pending"))
+        self.last_progress = self.pending.progress(time.monotonic())
+        self.reply.insert("end", self.last_progress, ("system", "pending", "progress"))
+
+    def begin_transmission(self, text=None, kind="rite"):
+        now = time.monotonic()
+        self.pending = Transmission(kind, text, datetime.now().astimezone().isoformat(),
+                                    now, self.response_times.estimate(kind))
+        self.reply.configure(state="normal")
+        self.insert_pending()
+        self.reply.configure(state="disabled")
+        self.reply.see("end")
+
+    def update_progress(self, now):
+        if self.pending is None:
+            return
+        label = self.pending.progress(now)
+        ranges = self.reply.tag_ranges("progress")
+        if label == self.last_progress or not ranges:
+            return
+        bottom = self.reply.yview()[1] >= 0.98
+        index = str(ranges[0])
+        self.reply.configure(state="normal")
+        self.delete_tagged("progress")
+        self.reply.insert(index, label, ("system", "pending", "progress"))
+        self.reply.configure(state="disabled")
+        self.last_progress = label
+        if bottom:
+            self.reply.see("end")
+
+    def finish_transmission(self, result=None):
+        if self.pending is None:
+            return
+        self.reply.configure(state="normal")
+        if result is None:
+            self.delete_tagged("progress")
+            self.reply.insert("end", "[UNSEALED] No reply confirmed, little keeper. The transmission remains unsealed.\n\n", "system")
+            # Retain the local human line, without treating it as a new pending
+            # request or writing a second conversation journal on the Pi.
+            self.reply.tag_remove("pending", "1.0", "end")
+        else:
+            self.response_times.observe(self.pending.kind, time.monotonic() - self.pending.started)
+            if any(entry["role"] == "human" for entry in result.get("entries", [])):
+                self.delete_tagged("pending")
+            else:
+                self.delete_tagged("progress")
+                self.reply.tag_remove("pending", "1.0", "end")
+        self.reply.configure(state="disabled")
+        self.pending = None
+        if self.deferred_archive is not None:
+            page, self.deferred_archive = self.deferred_archive, None
+            self.receive_archive(page)
+
+    def receive_archive(self, result):
+        generation, page, older, initial = result
+        if generation != self.generation:
+            return
+        if self.pending is not None and not older:
+            # At most one live page was already in flight when Send was pressed.
+            self.deferred_archive = result
+            return
+        self.receive_entries(page["entries"], older=older, initial=initial)
+        if page["entries"] and not older:
+            self.cursor = max(self.cursor, max(entry["id"] for entry in page["entries"]))
+        if older or initial:
+            self.has_more = page["has_more"]
+        self.restored = True
+        self.older.configure(state="normal" if self.has_more else "disabled")
+        if page["has_more"] and not older and not initial:
+            self.last_poll = 0
+        if self.status.get().startswith(("[BOOT]", "[LINK SILENT]")):
+            self.status.set("[LINK] Archive open. Type help / press F8 to talk. ^^")
 
     def worker(self, task, speak):
         from .pi import play
@@ -310,7 +404,8 @@ class Display:
         finally:
             self.events.put(("done", None))
 
-    def start_task(self, task, speak=False):
+    def start_task(self, task, speak=False, *, text=None, kind="rite"):
+        self.begin_transmission(text, kind)
         self.set_busy(True, "thinking")
         self.status.set("[COGITATOR] Consulting the little archive...")
         threading.Thread(target=self.worker, args=(task, speak), daemon=True).start()
@@ -332,13 +427,15 @@ class Display:
         elif action == "history":
             self.load_older()
         elif action == "notes":
-            self.start_task(lambda: {"text": "Saved notes:\n" + "\n".join(self.client.notes()["notes"]), "source": "system"})
+            self.start_task(lambda: {"text": "Saved notes:\n" + "\n".join(self.client.notes()["notes"]), "source": "system"}, kind="archive")
         elif text.startswith("/remember "):
-            self.start_task(lambda: {"text": "Saved notes:\n" + "\n".join(self.client.remember(text[10:])["notes"]), "source": "system"})
+            self.start_task(lambda: {"text": "Saved notes:\n" + "\n".join(self.client.remember(text[10:])["notes"]), "source": "system"}, kind="archive")
         else:
             speak = self.speak.get()
             task = {"art": self.client.art, "sermon": self.client.sermon, "ritual": self.client.ritual}.get(action)
-            self.start_task(lambda: task(speak) if task else self.client.chat(text, speak), speak)
+            self.start_task(lambda: task(speak) if task else self.client.chat(text, speak), speak,
+                            text=None if task else text,
+                            kind="rite" if task else ("chat-voice" if speak else "chat"))
 
     def hotkey(self, event):
         if self.hotkey_release is not None:
@@ -428,6 +525,7 @@ class Display:
             except queue.Empty:
                 break
             if kind == "reply":
+                self.finish_transmission(result)
                 self.animation = result.get("animation", "happy")
                 if result.get("source") == "forgotten":
                     self.entries.clear()
@@ -445,20 +543,7 @@ class Display:
                 if result.get("voice_error"):
                     self.status.set("[VOX] " + result["voice_error"])
             elif kind == "archive":
-                generation, page, older, initial = result
-                if generation != self.generation:
-                    continue
-                self.receive_entries(page["entries"], older=older, initial=initial)
-                if page["entries"] and not older:
-                    self.cursor = max(self.cursor, max(entry["id"] for entry in page["entries"]))
-                if older or initial:
-                    self.has_more = page["has_more"]
-                self.restored = True
-                self.older.configure(state="normal" if self.has_more else "disabled")
-                if page["has_more"] and not older and not initial:
-                    self.last_poll = 0
-                if self.status.get().startswith(("[BOOT]", "[LINK SILENT]")):
-                    self.status.set("[LINK] Archive open. Type help / press F8 to talk. ^^")
+                self.receive_archive(result)
             elif kind == "telemetry":
                 self.readings = result
             elif kind == "local":
@@ -484,11 +569,15 @@ class Display:
                 self.show_text("[VOX / LOCAL CHECK]\n" + "\n".join(result)
                                + "\nClose Marsi, then run " + CHECK_COMMAND)
             elif kind in ("warning", "error"):
+                if kind == "error":
+                    self.finish_transmission()
                 self.status.set(result)
                 self.show_text("[UNSEALED / " + kind.upper() + "] " + result)
             elif kind == "recorded":
+                self.begin_transmission("[Vox recording sealed; awaiting transcription.]", "voice" if self.speak.get() else "voice-silent")
                 self.recording = False
                 self.mode = "thinking"
+                self.status.set("[COGITATOR] Vox sealed; consulting the little archive...")
                 self.talk.configure(text="TALK [F8]", state="disabled")
             elif kind == "done":
                 self.recording = False
@@ -497,6 +586,7 @@ class Display:
                 self.last_interaction = time.monotonic()
                 self.last_poll = 0
         now = time.monotonic()
+        self.update_progress(now)
         if now - self.last_poll >= 10 and not self.polling:
             self.last_poll = now
             self.poll()

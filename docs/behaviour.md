@@ -188,6 +188,14 @@ to protect Pi memory; the full journal remains on the server until you delete it
 LATEST returns from an older page to recent entries.
 Failed transmissions and local help/error notices are not server memories.
 
+The Pi echoes a typed message immediately while Ubuntu is thinking. An ASCII
+`ESTIMATE` bar underneath uses recent request durations from the current display
+session. It stays below 100% until a response arrives, then disappears and the
+server's human/reply entries replace the temporary view. A completed voice
+recording shows a sealed-recording placeholder until the recognized words arrive.
+Failed requests leave the local typed line marked `UNSEALED`, without an
+automatic resend or a new Pi conversation database.
+
 The old database is upgraded automatically. Previously retained exchanges are
 imported once, with the migration time because older records had no timestamps.
 The old implementation already removed exchanges beyond its retention limit;

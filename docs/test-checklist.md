@@ -26,7 +26,14 @@ cd ~/marsi-companion
 - [ ] Marsi opens fullscreen with black/red/green styling, a small ASCII figure
       and readable Pi/server readings. Missing sensors show `--`.
 - [ ] Type `Hello Marsi. Explain what a Raspberry Pi does in two sentences.`
-      Receive a useful reply from Qwen.
+      Your words appear immediately with an estimated ASCII progress bar below
+      them, followed by a useful reply from Qwen. The human line appears once;
+      the progress bar disappears on reply arrival, even while audio is playing.
+- [ ] During a slow reply, scroll older messages and try LATEST. The current
+      pending message and its estimate remain available. An exceeded estimate
+      says `a longer thought` and never reaches 100% before the actual reply.
+- [ ] After F8/FINISH, a sealed-recording notice and estimate appear; recognized
+      words replace that notice when the reply arrives.
 - [ ] Ask an arithmetic question, a technical question and a friendly everyday
       question. Each answer should address its specific question, with restrained
       character flavour and no recycled long paragraph. If this fails, run the
@@ -46,6 +53,10 @@ cd ~/marsi-companion
 - [ ] Type `art`, `sermon`, `help` and `exit`. Commands perform their local
       action; `Tell me about art` remains a normal Qwen conversation.
 - [ ] Escape changes fullscreen to a window; Ctrl+Q closes Marsi. Reopen him.
+- [ ] Leave the Lite/X11 screen idle for at least 15 minutes with Marsi open.
+      The display stays on. Check `DISPLAY=:0 xset q` from the same user's SSH
+      session: screen-saver timeout is 0 and DPMS disabled or unavailable. When
+      exiting normally to an existing X11 desktop, its prior settings return.
 
 The model's answers vary. Separate conversational quality from whether a
 request completed. Record how long a cold first reply and a second reply take;

@@ -90,6 +90,17 @@ These steps follow [Ubuntu's OpenSSH guide](https://ubuntu.com/server/docs/how-t
 
 ## Pi: display and boot
 
+Outgoing messages appear immediately with an `ESTIMATE` bar. A bar waiting at
+95% means the response exceeded the estimate; it does not mean the request is
+almost complete. The estimate adapts within the current display session.
+On a failed connection, `UNSEALED` marks the local message; Marsi does not resend
+it automatically. Check the server and the journal before submitting it again.
+
+If the screen goes dark after idle time, update the Pi and install
+`x11-xserver-utils`, then reopen Marsi. The app disables the Lite/X11 screen saver
+and DPMS during operation. For checks and other desktop types, see
+[Keep the screen awake](raspberry-pi.md#keep-the-screen-awake).
+
 A missing pointer in an older Lite setup can come from the old `-nocursor`
 startup option. After pulling the current Pi code, run
 `bash scripts/install-pi-autostart.sh --lite` as the usual user and reboot. This
@@ -100,6 +111,7 @@ autologin. See the [pointer update steps](quickstart.md#3-start-the-display-manu
 | --- | --- |
 | `pgrep -af 'marsi_local.pi'` | Is the display process running? |
 | `pgrep -af 'Xorg|openbox'` | Is the Lite graphical session running? |
+| `DISPLAY=:0 xset q` | As the same Pi user while Marsi is open: screen-saver timeout should be 0 and DPMS disabled or unavailable |
 | `tail -n 60 ~/marsi-companion/data/pi-display.log` | Recent Lite display startup diagnostics |
 | `systemctl status getty@tty1 --no-pager` | Is the local console/autologin service available? |
 | `grep -A 5 '# BEGIN MARSI DISPLAY' ~/.profile` | Is the installed Lite startup block present? |

@@ -26,6 +26,8 @@ built, understood and repaired.
 | `marsi_local/server.py` | Authenticated HTTP endpoints |
 | `marsi_local/client.py` | Shared terminal/Pi API client |
 | `marsi_local/pi.py`, `display.py`, `ambient.py` | Audio, ASCII terminal display and idle rites |
+| `marsi_local/transmission.py` | In-memory response timings and explicitly estimated progress |
+| `marsi_local/screen.py` | Temporary X11 screen-saver/DPMS inhibition and restoration |
 | `marsi_local/telemetry.py`, `liturgy.py` | Numeric readings, original ASCII art and persistent calendar |
 | `config/` | Shareable setting examples, without credentials |
 | `deploy/`, `scripts/` | Installation and startup templates |
@@ -136,10 +138,11 @@ in-character notice uses source `language-recovery` and `language_repaired=false
 This notice supports ordinary speech and journal display, but is excluded from
 the `turns` working context. Only a fixed reason is logged, never draft text.
 
-On Linux, install `python3-tk`, `xvfb` and `alsa-utils`, then run:
+On Linux, install `python3-tk`, `xvfb`, `alsa-utils` and `x11-xserver-utils`, then run:
 
 ```bash
 xvfb-run -a .venv-tests/bin/python -m tests.pi_display_smoke
+xvfb-run -a .venv-tests/bin/python -m unittest tests.display_transmission_smoke tests.screen_smoke -v
 .venv-tests/bin/python -m unittest tests.audio_playback_smoke -v
 ```
 
@@ -151,6 +154,18 @@ descriptor hand-off and PCM handling, not physical speaker performance.
 A separate model-free decoder/language test installs speech requirements
 on Python 3.10, 3.12 and 3.14. Actual microphone, speaker and model inference still need the
 hardware acceptance sequence in the setup guides.
+
+The transmission smoke tests use real Tk widgets with delayed synthetic replies.
+They cover immediate echo, in-flight journal pages, bounded archive redraws,
+failure retention, voice placeholders, ongoing telemetry and bar removal before
+playback ends. Live journal polling waits while a request is pending; one page
+already in flight is deferred and merged before the response entries, by server
+entry ID. Older-page loading remains available. This avoids guessing which
+repeated question belongs to a pending message and needs no server API change.
+Timing samples are held in RAM only, per request kind, and exclude playback.
+No estimate is represented as real inference progress. The X11 smoke test uses
+real `xset` under Xvfb to verify zero timeout and exact restoration. Physical
+monitor idle behaviour still needs the hardware acceptance check.
 
 ## Next milestones
 

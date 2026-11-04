@@ -193,6 +193,16 @@ with tempfile.TemporaryDirectory() as state:
                 display.mode = "idle"
                 display.draw(124.4)
                 render_windows(root, destination / f"terminal-{width}x{height}.png")
+                display.response_times = type(display.response_times)()
+                display.begin_transmission("What did the little machines observe today?", "chat")
+                display.pending.started -= 19
+                display.update_progress(time.monotonic())
+                display.reply.see("end")
+                display.mode = "thinking"
+                root.update()
+                display.draw(124.4)
+                render_windows(root, destination / f"terminal-pending-{width}x{height}.png")
+                display.finish_transmission({"entries": [{"role": "human"}]})
         if os.getenv("MARSI_RENDER_DIR") and os.name == "nt":
             from marsi_local.electoo import Electoo
             portrait = tk.Toplevel(root)
