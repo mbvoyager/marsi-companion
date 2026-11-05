@@ -147,6 +147,7 @@ with tempfile.TemporaryDirectory() as state:
             {"id": 3, "at": now, "kind": "art", "role": "marsi", "text": client.art()["text"]},
         ], initial=True)
         display.polling = True
+        display.link_online = True
         for width, height in ((800, 480), (480, 320)):
             root.geometry(f"{width}x{height}-20000+0")
             root.update()
@@ -163,6 +164,8 @@ with tempfile.TemporaryDirectory() as state:
                 assert display.canvas.find_all(), "ASCII character should be visible"
                 assert display.reply.winfo_height() > 100, "Archive must remain useful"
                 assert display.talk.winfo_viewable(), "Talk must be visible"
+                assert display.link_badge.winfo_viewable(), "The link status must be visible"
+                assert display.link_badge.winfo_rootx() + display.link_badge.winfo_width() <= root.winfo_rootx() + width
                 assert display.meter_label.winfo_rooty() + display.meter_label.winfo_height() <= root.winfo_rooty() + height - 40, "Readings should fit above controls"
                 assert display.talk.winfo_rootx() + display.talk.winfo_width() <= root.winfo_rootx() + width, "Talk must fit horizontally"
                 font = tkfont.Font(font=display.reply.cget("font"))

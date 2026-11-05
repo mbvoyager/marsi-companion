@@ -175,13 +175,18 @@ normal timer, quiet-hour and speech settings when finished.
 
 - [ ] Close Marsi while idle or playing audio; the display exits and any active
       playback stops.
-- [ ] On Ubuntu, run `systemctl --user stop marsi-server`. On the Pi, a typed
-      request should show a connection error. His ASCII blink continues and
-      loaded journal text stays visible. Server-backed rituals are unavailable.
-      A stalled request can
-      take up to 240 seconds to time out.
-- [ ] On Ubuntu, run `systemctl --user start marsi-server`. Try another message
-      from the Pi and receive a reply.
+- [ ] On Ubuntu, run `systemctl --user stop marsi-server`. Wait for the Pi's
+      link badge to show `Retry in` and `Connecting`. The character continues
+      blinking and the loaded journal stays visible. Type a draft and press
+      Send. The draft stays in the input field while the link is down.
+- [ ] Open Marsi on the Pi while the service is stopped. The same status badge
+      shows attempts from startup. Start the service on Ubuntu with
+      `systemctl --user start marsi-server`. The display changes to `Online`
+      and loads the journal. Send the draft manually and receive a reply.
+- [ ] From the Pi or a second device on the trusted LAN or Wi-Fi, open
+      `http://YOUR_SERVER_IP:8765/health` using the Ubuntu LAN address.
+      Check for `"status": "ok"` with the
+      [LAN health instructions](ubuntu-server.md#check-health-from-lan-or-wi-fi).
 - [ ] If you enabled Ubuntu startup, reboot Ubuntu and verify the user service
       and a Pi conversation after it becomes ready.
 - [ ] If you enabled Pi startup, reboot the Pi and verify its display. For

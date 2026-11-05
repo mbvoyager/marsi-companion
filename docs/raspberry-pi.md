@@ -246,12 +246,22 @@ after a confirmation. Copies and backups of the database remain separate.
 
 ## Connection loss
 
-The Pi shows an error if the server is unavailable. It never silently switches
-Qwen replies to fake AI answers. The ASCII character keeps blinking, and loaded
-journal text remains visible. Archive/telemetry connections retry automatically;
-server-backed rituals resume when reachable. Try another message once the server
-is back. An in-progress
-request can take up to 240 seconds to time out, while the screen remains responsive.
+The top-right link indicator shows `Connecting #1` as soon as Marsi starts.
+After a failed attempt, `Retry in` counts down until the next try. The pauses
+between attempts are 1, 2, 4 and then 8 seconds. Each background HTTP request
+has a five-second socket timeout. `Token rejected` identifies a rejected login
+and retries after ten seconds. Correct the Pi's `.env.pi` and reopen Marsi if
+you need to change its token or server address.
+
+`Online` appears when the server accepts the background request. The loaded
+journal remains visible during a disconnect. You can keep typing during startup
+or a disconnect. Your draft stays in the input field until you send it while
+online. Scheduled speech and idle rites resume when the link returns. An already
+submitted chat may take up to the normal 240-second request timeout.
+
+Open `http://YOUR_SERVER_IP:8765/health` from the Pi or another device in the
+same LAN or Wi-Fi. Use the Ubuntu address from `MARSI_SERVER_URL` and append
+`/health`. See the [LAN health check and firewall setup](ubuntu-server.md#check-health-from-lan-or-wi-fi).
 
 [Useful troubleshooting commands](troubleshooting.md) cover the display process,
 boot launcher, audio services, server and logs. Lite startup logs go to

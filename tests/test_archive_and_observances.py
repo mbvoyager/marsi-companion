@@ -186,6 +186,7 @@ class InterfaceRulesTests(unittest.TestCase):
         now = datetime(2026, 10, 4, 7, tzinfo=timezone.utc)
         display.pending_spoken = {"id": 7, "kind": "morning", "at": now.isoformat()}
         display.busy = True
+        display.link_online = True
         display.speak = display.rituals = SimpleNamespace(get=lambda: True)
         display.observance_speech = display.morning_override = True
         display.ambient = SimpleNamespace(quiet_start=22, quiet_end=8)
@@ -197,6 +198,11 @@ class InterfaceRulesTests(unittest.TestCase):
             display.scheduled_voice(100)
             display.start_task.assert_not_called()
             display.busy = False
+            display.link_online = False
+            display.scheduled_voice(100)
+            display.start_task.assert_not_called()
+            self.assertEqual(display.pending_spoken["id"], 7)
+            display.link_online = True
             display.scheduled_voice(100)
         display.start_task.assert_called_once()
         display.start_task.call_args.args[0]()

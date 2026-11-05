@@ -90,6 +90,20 @@ These steps follow [Ubuntu's OpenSSH guide](https://ubuntu.com/server/docs/how-t
 
 ## Pi: display and boot
 
+The link badge shows `Connecting` with the attempt number, `Retry in` with a
+countdown, `Token rejected` when the server rejects the configured token, or
+`Online` after a successful poll. If it keeps retrying, check the server from
+the Pi using its Ubuntu LAN address.
+
+```bash
+curl -sS --max-time 5 http://YOUR_SERVER_IP:8765/health
+```
+
+If the local Ubuntu check succeeds and this LAN check fails, compare the Ubuntu
+LAN address with `MARSI_SERVER_URL`, then check the listener and firewall.
+The [LAN health guide](ubuntu-server.md#check-health-from-lan-or-wi-fi) includes
+the browser address and rules for additional Wi-Fi devices.
+
 ### Recover the display after the withdrawn cursor configuration
 
 An earlier version of this guide offered `99-marsi-software-cursor.conf`.

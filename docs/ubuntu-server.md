@@ -231,6 +231,33 @@ sudo ufw allow from YOUR_PI_IP to any port 8765 proto tcp
 Replace the placeholder before running that command. Do not enable a firewall
 from a remote session until its SSH rule is configured.
 
+### Check health from LAN or Wi-Fi
+
+Open `http://YOUR_SERVER_IP:8765/health` in a browser on a device in the same
+home network. Use the Ubuntu LAN address from `hostname -I`. The installed
+Marsi service listens on port 8765 on the server's network interfaces.
+From the Pi or a laptop on that network, the equivalent command is
+
+```bash
+curl -sS --max-time 5 http://YOUR_SERVER_IP:8765/health
+```
+
+The running server responds with `{"status": "ok", "mode": "local-llm"}`.
+This status is available without a token. Chat and journal requests use the
+configured token. Use a chat to check model inference and speech after the
+HTTP check passes.
+
+If UFW currently allows only the Pi, use the same rule above with the address
+of each additional device. To allow the entire trusted subnet, find its CIDR
+with `ip -4 route show scope link` on Ubuntu. Use the route whose source address
+matches the Ubuntu LAN address, for example `192.168.1.0/24`. Substitute your
+subnet below. This grants access to port 8765 from that network.
+[Ubuntu firewall documentation](https://ubuntu.com/server/docs/how-to/security/firewalls/#allow-access-from-specific-hosts)
+
+```bash
+sudo ufw allow proto tcp from YOUR_TRUSTED_LAN_SUBNET to any port 8765
+```
+
 Continue with the typed conversation, display, and microphone/speaker checks
 in the Pi guide. Return here for step 6 once those tests work.
 

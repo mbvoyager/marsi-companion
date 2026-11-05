@@ -13,7 +13,9 @@ from .speech import MAX_AUDIO_BYTES
 
 
 class ClientError(Exception):
-    pass
+    def __init__(self, message, status=None):
+        super().__init__(message)
+        self.status = status
 
 
 class Client:
@@ -36,8 +38,10 @@ class Client:
         else:
             body = None
         request = urllib.request.Request(self.url + path, data=body, headers=headers, method=method)
+        quick_request = path == "/health" or path.startswith(("/v1/telemetry", "/v1/journal"))
+        timeout = min(self.timeout, 5) if quick_request else self.timeout
         try:
-            with self.http.open(request, timeout=10 if path == "/health" or path.startswith(("/v1/telemetry", "/v1/journal")) else self.timeout) as response:
+            with self.http.open(request, timeout=timeout) as response:
                 raw = response.read(12_000_001)
             if len(raw) > 12_000_000:
                 raise ClientError("Marsi sent a reply that was too large.")
@@ -50,7 +54,7 @@ class Client:
                 detail = json.loads(error.read(16384)).get("error", "Request rejected")
             except (ValueError, AttributeError):
                 detail = f"Request rejected ({error.code})"
-            raise ClientError(str(detail)) from error
+            raise ClientError(str(detail), status=error.code) from error
         except (OSError, ValueError) as error:
             raise ClientError("The tiny forge is unreachable. Check the server, address and Wi-Fi.") from error
 

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from math import ceil
 import os
 from pathlib import Path
 import queue
@@ -21,6 +22,9 @@ from .pointer import install_reticle
 from .transmission import ResponseTimes, Transmission
 
 
+RETRY_DELAYS = (1, 2, 4, 8)
+
+
 class Display:
     def __init__(self, root, client, windowed=False):
         import tkinter as tk
@@ -38,7 +42,9 @@ class Display:
         self.cursor = self.before = 0
         self.has_more = False
         self.restored = False
-        self.last_poll = 0.0
+        self.next_poll_at = 0.0
+        self.link_online = self.link_auth_error = False
+        self.link_failures = 0
         self.local = Telemetry()
         self.readings = {"pi": None, "server": None}
         self.pending_spoken = None
@@ -78,9 +84,16 @@ class Display:
         root.rowconfigure(2, weight=1)
         self.frieze = tk.Canvas(root, bg=BLACK, highlightthickness=0, height=52)
         self.frieze.grid(row=0, column=0, sticky="ew")
-        self.status = tk.StringVar(value="[BOOT] Opening the machine-flow aperture...")
-        tk.Label(root, textvariable=self.status, bg=BLACK, fg=BRASS,
-                 font=(self.mono, 9), anchor="w", padx=8, pady=4).grid(row=1, column=0, sticky="ew")
+        header = tk.Frame(root, bg=BLACK)
+        header.grid(row=1, column=0, sticky="ew")
+        header.columnconfigure(0, weight=1)
+        self.status = tk.StringVar(value="[BOOT] Opening the archive...")
+        tk.Label(header, textvariable=self.status, bg=BLACK, fg=BRASS,
+                 font=(self.mono, 9), anchor="w", padx=8, pady=4).grid(row=0, column=0, sticky="ew")
+        self.link_status = tk.StringVar(value="[LINK] Connecting #1")
+        self.link_badge = tk.Label(header, textvariable=self.link_status, bg=BLACK, fg=BRASS,
+                                   font=(self.mono, 8), padx=8)
+        self.link_badge.grid(row=0, column=1, sticky="e")
         body = tk.Frame(root, bg=BLACK)
         body.grid(row=2, column=0, sticky="nsew", padx=7)
         body.columnconfigure(0, weight=1)
@@ -253,12 +266,15 @@ class Display:
         if self.polling or self.closed:
             return
         self.polling = True
+        if not older:
+            self.next_poll_at = time.monotonic() + 10
         generation, cursor, before = self.generation, self.cursor, self.before
         initial = not self.restored
         # Readings still refresh while waiting. Defer journal changes until the
         # request resolves so the provisional human line cannot be duplicated.
         read_journal = self.pending is None
         def collect():
+            connected = token_rejected = False
             try:
                 if older:
                     page = self.client.journal(before=before)
@@ -271,11 +287,49 @@ class Display:
                     if read_journal:
                         page = self.client.journal(after=cursor)
                         self.events.put(("archive", (generation, page, False, initial)))
-            except (ClientError, ValueError):
-                self.events.put(("offline", None))
+                connected = True
+            except ClientError as error:
+                token_rejected = error.status == 401
+            except ValueError:
+                pass
             finally:
-                self.events.put(("polled", None))
+                self.events.put(("polled", (connected, token_rejected)))
         threading.Thread(target=collect, daemon=True).start()
+
+    def finish_poll(self, connected, token_rejected):
+        self.polling = False
+        self.link_online = connected
+        self.link_auth_error = token_rejected
+        if connected:
+            self.link_failures = 0
+            if self.status.get().startswith(("[BOOT]", "[LINK] Waiting")):
+                self.status.set("[ARCHIVE] Type help / F8 to talk. ^^")
+            return
+        self.readings["server"] = None
+        self.link_failures += 1
+        retry_index = min(self.link_failures, len(RETRY_DELAYS)) - 1
+        delay = 10 if token_rejected else RETRY_DELAYS[retry_index]
+        self.next_poll_at = time.monotonic() + delay
+
+    def update_link_status(self, now):
+        if self.link_online:
+            text, color = "[LINK] Online", GREEN
+        elif self.polling:
+            text, color = f"[LINK] Connecting #{self.link_failures + 1}", BRASS
+        else:
+            remaining = max(1, ceil(self.next_poll_at - now))
+            if self.link_auth_error:
+                text, color = f"[LINK] Token rejected / {remaining}s", RED
+            else:
+                text, color = f"[LINK] Retry in {remaining}s", BRASS
+        if text != self.link_status.get():
+            self.link_status.set(text)
+            self.link_badge.configure(fg=color)
+
+    def can_contact(self):
+        if not self.link_online:
+            self.status.set("[LINK] Waiting for the forge link...")
+        return self.link_online
 
     def load_older(self):
         if self.before and self.has_more:
@@ -299,7 +353,7 @@ class Display:
         self.reply.delete("1.0", "end")
         self.insert_pending()
         self.reply.configure(state="disabled")
-        self.last_poll = 0
+        self.next_poll_at = 0
 
     def delete_tagged(self, tag):
         ranges = self.reply.tag_ranges(tag)
@@ -381,9 +435,7 @@ class Display:
         self.restored = True
         self.older.configure(state="normal" if self.has_more else "disabled")
         if page["has_more"] and not older and not initial:
-            self.last_poll = 0
-        if self.status.get().startswith(("[BOOT]", "[LINK SILENT]")):
-            self.status.set("[LINK] Archive open. Type help / press F8 to talk. ^^")
+            self.next_poll_at = 0
 
     def worker(self, task, speak):
         from .pi import play
@@ -405,6 +457,8 @@ class Display:
             self.events.put(("done", None))
 
     def start_task(self, task, speak=False, *, text=None, kind="rite"):
+        if not self.can_contact():
+            return
         self.begin_transmission(text, kind)
         self.set_busy(True, "thinking")
         self.status.set("[COGITATOR] Consulting the little archive...")
@@ -417,6 +471,8 @@ class Display:
             self.close()
             return
         if self.busy or not text:
+            return
+        if action not in ("help", "history") and not self.can_contact():
             return
         self.input.delete(0, "end")
         self.last_interaction = time.monotonic()
@@ -461,7 +517,7 @@ class Display:
             self.talk.configure(text="TALK [F8]", state="disabled")
             self.mode = "thinking"
             self.status.set("[AUDITORY] Recording sealed; consulting the cogitator...")
-        elif not self.busy:
+        elif not self.busy and self.can_contact():
             self.last_interaction = time.monotonic()
             self.recording = True
             self.stop = threading.Event()
@@ -490,7 +546,7 @@ class Display:
             self.start_task(lambda: self.client.ritual(speak), speak)
 
     def forget(self):
-        if self.busy:
+        if self.busy or not self.can_contact():
             return
         from tkinter import messagebox
         if messagebox.askyesno("Forget this session?", "Delete this session's server journal, working context and saved notes? Backups are separate.", parent=self.root):
@@ -503,7 +559,7 @@ class Display:
 
     def scheduled_voice(self, now):
         entry = self.pending_spoken
-        if not entry or self.busy:
+        if not entry or self.busy or not self.link_online:
             return
         age = (datetime.now().astimezone() - datetime.fromisoformat(entry["at"])).total_seconds()
         if age > 600 or not self.speak.get() or not self.rituals.get() or not self.observance_speech:
@@ -548,12 +604,8 @@ class Display:
                 self.readings = result
             elif kind == "local":
                 self.readings["pi"] = result
-            elif kind == "offline":
-                self.readings["server"] = None
-                if not self.busy:
-                    self.status.set("[LINK SILENT] Retrying archive and machine readings...")
             elif kind == "polled":
-                self.polling = False
+                self.finish_poll(*result)
             elif kind == "speaking":
                 self.mode = "speaking"
             elif kind == "spoken":
@@ -584,14 +636,14 @@ class Display:
                 self.talk.configure(text="TALK [F8]")
                 self.set_busy(False)
                 self.last_interaction = time.monotonic()
-                self.last_poll = 0
+                self.next_poll_at = 0
         now = time.monotonic()
         self.update_progress(now)
-        if now - self.last_poll >= 10 and not self.polling:
-            self.last_poll = now
+        if now >= self.next_poll_at and not self.polling:
             self.poll()
+        self.update_link_status(now)
         self.scheduled_voice(now)
-        if self.restored and self.ambient.due(now, datetime.now().hour, self.last_interaction, self.busy, self.rituals.get()):
+        if self.link_online and self.restored and self.ambient.due(now, datetime.now().hour, self.last_interaction, self.busy, self.rituals.get()):
             speak = self.ritual_speech and self.speak.get()
             self.start_task(lambda: self.client.ritual(speak), speak)
         self.draw(now)

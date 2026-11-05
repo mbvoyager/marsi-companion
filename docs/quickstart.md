@@ -152,8 +152,11 @@ sudo reboot
 ```
 
 The SSH session will disconnect. The display should open after the Pi boots.
-The Ubuntu server also needs to be running; the display retries its connection
-until the server is ready. Keep a USB speakerphone attached. For Bluetooth,
+Watch the top-right link indicator. `Connecting` shows the current attempt,
+`Retry in` shows the next attempt's countdown, and `Online` means the server
+accepted the connection. From another LAN or Wi-Fi device, open
+`http://YOUR_SERVER_IP:8765/health` for the [server status](ubuntu-server.md#check-health-from-lan-or-wi-fi).
+Keep a USB speakerphone attached. For Bluetooth,
 keep the receiver powered and verify reconnection separately using
 [Bluetooth audio](bluetooth-audio.md).
 

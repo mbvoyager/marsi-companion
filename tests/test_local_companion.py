@@ -162,8 +162,9 @@ class APITests(unittest.TestCase):
     def test_health_is_public_but_chat_requires_token(self):
         visitor = Client(self.url)
         self.assertEqual(visitor.request("/health", method="GET")["status"], "ok")
-        with self.assertRaisesRegex(ClientError, "token"):
+        with self.assertRaisesRegex(ClientError, "token") as denied:
             visitor.chat("Hello")
+        self.assertEqual(denied.exception.status, 401)
 
     def test_chat_and_memory_roundtrip_then_forget(self):
         self.client.remember("My name is Ada")
