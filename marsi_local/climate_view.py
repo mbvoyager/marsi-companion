@@ -8,14 +8,14 @@ import threading
 from .client import ClientError
 from .electoo import BLACK, BONE, BRASS, DIM, GREEN, RED, Electoo
 
-PERIODS = (("now", "Jetzt"), ("3h", "3 h"), ("24h", "24 h"), ("7d", "7 Tage"))
+PERIODS = (("now", "Now"), ("3h", "3 h"), ("24h", "24 h"), ("7d", "7 days"))
 COLORS = (GREEN, BRASS, RED, BONE)
 DASHES = ((), (6, 3), (2, 3), (7, 3, 2, 3))
 PANEL = "#191010"
 SENSOR_STATES = {
-    "fresh": ("EMPFANG", GREEN),
-    "stale": ("SIGNAL ALT", RED),
-    "waiting": ("WARTE AUF WERTE", BRASS),
+    "fresh": ("FRESH", GREEN),
+    "stale": ("STALE READING", RED),
+    "waiting": ("WAITING FOR DATA", BRASS),
 }
 
 
@@ -44,7 +44,7 @@ class ClimateView:
             tab = button(bar, label, lambda key=key: self.select(key))
             tab.pack(side="left", padx=1)
             self.tabs[key] = tab
-        self.status = tk.Label(bar, text="[ VERBINDEN ]", bg=BLACK, fg=BRASS, font=(mono, -11), padx=4)
+        self.status = tk.Label(bar, text="[ CONNECTING ]", bg=BLACK, fg=BRASS, font=(mono, -11), padx=4)
         self.status.pack(side="right")
         self.pages = tk.Frame(bar, bg=BLACK)
         self.previous = button(self.pages, "<", lambda: self.turn_page(-1))
@@ -164,13 +164,13 @@ class ClimateView:
         else:
             self.pages.pack_forget()
             if self.feed_status in (404, 503):
-                message = "Klima-Archiv auf Ubuntu pruefen."
+                message = "Check the climate archive on Ubuntu."
             elif self.feed_status == 401:
-                message = "Marsi-Token auf dem Pi pruefen."
+                message = "Check the Marsi token on the Pi."
             elif self.period != "now":
-                message = "Messarchiv wird abgefragt ..." if not self.history_error else "Messarchiv wird erneut angefragt ..."
+                message = "Loading climate history ..." if not self.history_error else "Retrying climate history ..."
             else:
-                message = "Warte auf das Klima-Archiv ..."
+                message = "Waiting for the climate archive ..."
             self.cog.ring(width / 2, height / 2 - 17, 8, BRASS)
             c.create_text(width / 2, height / 2 + 9, text=message, fill=BONE, font=self.label_font)
 
@@ -193,21 +193,21 @@ class ClimateView:
         c.create_line(x, y + 19, x, y, x + 21, y, fill=accent, width=2)
         c.create_line(x + w - 21, y + h, x + w, y + h, x + w, y + h - 14, fill=accent)
         self.cog.ring(x + 13, y + 12, 4, accent, teeth=8)
-        location = "AUSSEN" if sensor["location"] == "outdoor" else "INNEN"
+        location = "OUTDOOR" if sensor["location"] == "outdoor" else "INDOOR"
         c.create_text(x + 24, y + 12, text=self.fit(sensor["name"], w - 94, self.title_font),
                       anchor="w", fill=BONE, font=self.title_font)
         c.create_text(x + w - 9, y + 12, text=f"[{location}]", anchor="e", fill=BRASS, font=self.label_font)
         readings = sensor["readings"]
         temperature = readings.get("temperature", {}).get("value")
         humidity = readings.get("humidity", {}).get("value")
-        temp_text = "--" if temperature is None else f"{temperature:.1f}".replace(".", ",")
-        humidity_text = "--" if humidity is None else f"{humidity:.1f}".replace(".", ",")
+        temp_text = "--" if temperature is None else f"{temperature:.1f}"
+        humidity_text = "--" if humidity is None else f"{humidity:.1f}"
         c.create_text(x + 10, y + h * .44, text=temp_text + " °C", anchor="w", fill=GREEN,
                       font=(self.mono, -30 if h >= 110 else -22, "bold"), tags="climate-temperature")
-        c.create_text(x + 11, y + h * .69, text=humidity_text + " % rF", anchor="w", fill=BONE,
+        c.create_text(x + 11, y + h * .69, text=humidity_text + " % RH", anchor="w", fill=BONE,
                       font=(self.mono, -14 if h >= 110 else -12), tags="climate-humidity")
         observed = sensor.get("last_measurement_ms")
-        stamp = "--" if observed is None else datetime.fromtimestamp(observed / 1000).strftime("%d.%m. %H:%M")
+        stamp = "--" if observed is None else datetime.fromtimestamp(observed / 1000).strftime("%d/%m %H:%M")
         label, color = SENSOR_STATES[sensor["status"]]
         c.create_text(x + 11, y + h - 9, text=stamp, anchor="w", fill=BRASS, font=self.label_font)
         c.create_text(x + w - 9, y + h - 9, text=label, anchor="e", fill=color, font=self.label_font)
@@ -222,16 +222,16 @@ class ClimateView:
             y = 12 + (position // columns) * 15
             color = sensor.get("color") or COLORS[index % len(COLORS)]
             self.canvas.create_line(x, y, x + 20, y, fill=color, width=2, dash=DASHES[index % len(DASHES)])
-            label = "AUSSEN " if sensor["location"] == "outdoor" else ""
+            label = "OUTDOOR " if sensor["location"] == "outdoor" else ""
             if states.get(sensor["id"]) == "stale":
-                label += "ALT / "
+                label += "STALE / "
             label += sensor["name"]
             self.canvas.create_text(x + 25, y, text=self.fit(label, column_width - 30, self.label_font),
                                     anchor="w", fill=BONE, font=self.label_font)
         top = 7 + 15 * ceil(len(sensors) / columns)
         chart_height = (height - top - 10) / 2
-        self.plot(sensors, history, "temperature", "TEMPERATUR [°C]", top, chart_height, width)
-        self.plot(sensors, history, "humidity", "LUFTFEUCHTE [% rF]", top + chart_height + 4,
+        self.plot(sensors, history, "temperature", "TEMPERATURE [°C]", top, chart_height, width)
+        self.plot(sensors, history, "humidity", "HUMIDITY [% RH]", top + chart_height + 4,
                   chart_height, width, time_labels=True)
 
     def plot(self, sensors, history, metric, title, top, height, width, *, time_labels=False):
@@ -258,10 +258,10 @@ class ClimateView:
             c.create_line(x, ceiling, x, bottom, fill=DIM)
             if time_labels:
                 when = datetime.fromtimestamp((start + fraction * (end - start)) / 1000)
-                stamp = when.strftime("%d.%m." if self.period == "7d" else "%H:%M")
+                stamp = when.strftime("%d/%m" if self.period == "7d" else "%H:%M")
                 c.create_text(x, bottom + 3, text=stamp, anchor=anchor, fill=BRASS, font=self.label_font)
         if not values:
-            c.create_text((left + right) / 2, (ceiling + bottom) / 2, text="Keine Messwerte im Zeitraum",
+            c.create_text((left + right) / 2, (ceiling + bottom) / 2, text="No samples in this period",
                           fill=BONE, font=self.label_font)
         gap = (self.snapshot or {}).get("stale_after_ms", 7_200_000)
         for index, sensor in sensors:

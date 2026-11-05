@@ -91,22 +91,22 @@ class ClimateDisplaySmoke(unittest.TestCase):
 
     def test_cards_and_three_history_views_fit_both_display_sizes(self):
         self.display.tab_buttons["climate"].invoke()
-        self.pump_until(lambda: "[AUSSEN]" in self.labels())
+        self.pump_until(lambda: "[OUTDOOR]" in self.labels())
         for width, height in ((800, 480), (480, 320)):
             self.root.geometry(f"{width}x{height}-20000+0")
             self.root.update()
             self.panel.tabs["now"].invoke()
             self.pump_until(lambda: not self.panel.dirty and len(self.panel.canvas.find_withtag("climate-card")) >= 2)
-            self.assertIn("[AUSSEN]", self.labels())
-            self.assertIn("SIGNAL ALT", self.labels())
+            self.assertIn("[OUTDOOR]", self.labels())
+            self.assertIn("STALE READING", self.labels())
             self.check_text_fits()
             for period in ("3h", "24h", "7d"):
                 self.panel.tabs[period].invoke()
                 self.pump_until(lambda: self.panel.history and not self.panel.dirty)
                 self.assertEqual(self.panel.history["range"], period)
-                self.assertIn("TEMPERATUR [°C]", self.labels())
-                self.assertIn("LUFTFEUCHTE [% rF]", self.labels())
-                self.assertIn("AUSSEN ALT / Gate", self.labels())
+                self.assertIn("TEMPERATURE [°C]", self.labels())
+                self.assertIn("HUMIDITY [% RH]", self.labels())
+                self.assertIn("OUTDOOR STALE / Gate", self.labels())
                 self.assertGreaterEqual(len(self.panel.canvas.find_withtag("climate-trace")), 8)
                 self.check_text_fits()
 
@@ -114,9 +114,9 @@ class ClimateDisplaySmoke(unittest.TestCase):
         self.display.show_text("An archived line.")
         self.display.input.insert(0, "Unsent draft")
         self.display.tab_buttons["climate"].invoke()
-        self.pump_until(lambda: "21,5 °C" in self.labels())
+        self.pump_until(lambda: "21.5 °C" in self.labels())
         self.client.snapshots.put(sample_snapshot(23.4))
-        self.pump_until(lambda: "23,4 °C" in self.labels())
+        self.pump_until(lambda: "23.4 °C" in self.labels())
         with patch("marsi_local.pi.record", return_value=b"test audio"):
             self.display.hotkey(None)
             self.pump_until(lambda: not self.display.busy)

@@ -1,11 +1,11 @@
 const PALETTE = ["#9fbf97", "#bca273", "#da7769", "#d8cbb0"];
 const DASHES = [[], [6, 3], [2, 3], [7, 3, 2, 3]];
-const STATES = {fresh: "EMPFANG", stale: "SIGNAL ALT", waiting: "WARTE AUF WERTE"};
+const STATES = {fresh: "FRESH", stale: "STALE READING", waiting: "WAITING FOR DATA"};
 const METRICS = ["temperature", "humidity"];
-const number = new Intl.NumberFormat("de-DE", {minimumFractionDigits: 1, maximumFractionDigits: 1});
-const dateTime = new Intl.DateTimeFormat("de-DE", {dateStyle: "short", timeStyle: "short"});
-const clock = new Intl.DateTimeFormat("de-DE", {hour: "2-digit", minute: "2-digit"});
-const day = new Intl.DateTimeFormat("de-DE", {day: "2-digit", month: "2-digit"});
+const number = new Intl.NumberFormat("en-GB", {minimumFractionDigits: 1, maximumFractionDigits: 1});
+const dateTime = new Intl.DateTimeFormat("en-GB", {dateStyle: "short", timeStyle: "short"});
+const clock = new Intl.DateTimeFormat("en-GB", {hour: "2-digit", minute: "2-digit"});
+const day = new Intl.DateTimeFormat("en-GB", {day: "2-digit", month: "2-digit"});
 
 function color(sensor, index) {
   return /^#[0-9a-f]{6}$/i.test(sensor.color || "") ? sensor.color : PALETTE[index % PALETTE.length];
@@ -72,7 +72,7 @@ export class ClimateView {
   open() {
     if (this.feed) return;
     this.feed = new AbortController();
-    this.setLink("[ VERBINDEN ]", "waiting");
+    this.setLink("[ CONNECTING ]", "waiting");
     this.render();
     this.follow(this.feed.signal);
     this.scheduleHistory();
@@ -141,8 +141,8 @@ export class ClimateView {
         if (signal.aborted) return;
         this.setLink("[ LINK PAUSE ]", "waiting");
         this.message.textContent = error.status === 503
-          ? "Klima-Archiv auf Ubuntu prüfen."
-          : "Die Verbindung zum Messarchiv wird erneuert.";
+          ? "Check the climate archive on Ubuntu."
+          : "Reconnecting to the climate archive ...";
         await delay(retry, signal);
         retry = Math.min(retry * 2, 8000);
       }
@@ -179,7 +179,7 @@ export class ClimateView {
       this.render();
     } catch (error) {
       if (controller.signal.aborted) return;
-      this.message.textContent = "Messarchiv wird erneut angefragt ...";
+      this.message.textContent = "Retrying climate history ...";
       this.scheduleHistory(5000);
     }
   }
@@ -206,18 +206,18 @@ export class ClimateView {
       const cog = text("span", "+O+", "card-cog");
       cog.setAttribute("aria-hidden", "true");
       title.prepend(cog);
-      head.append(title, text("span", sensor.location === "outdoor" ? "[ AUSSEN ]" : "[ INNEN ]", "badge"));
+      head.append(title, text("span", sensor.location === "outdoor" ? "[ OUTDOOR ]" : "[ INDOOR ]", "badge"));
       const value = metric => sensor.readings[metric] ? number.format(sensor.readings[metric].value) : "--";
       const foot = text("div", "", "card-footer");
-      const stamp = sensor.last_measurement_ms == null ? "Letzte Messung --" : dateTime.format(sensor.last_measurement_ms);
+      const stamp = sensor.last_measurement_ms == null ? "Last reading --" : dateTime.format(sensor.last_measurement_ms);
       const state = text("span", STATES[sensor.status] || STATES.waiting);
       state.dataset.status = sensor.status;
       foot.append(text("span", stamp), state);
       tile.append(head, text("p", `${value("temperature")} °C`, "reading"),
-                  text("p", `${value("humidity")} % rF`, "humidity"), foot);
+                  text("p", `${value("humidity")} % RH`, "humidity"), foot);
       return tile;
     }));
-    if (!sensors.length) this.cards.append(text("p", "Warte auf das Klima-Archiv ...", "message"));
+    if (!sensors.length) this.cards.append(text("p", "Waiting for the climate archive ...", "message"));
   }
 
   renderLegend() {
@@ -227,8 +227,8 @@ export class ClimateView {
     if (key === this.legendKey) return;
     this.legendKey = key;
     this.legend.replaceChildren(...series.map((sensor, index) => {
-      const prefix = sensor.location === "outdoor" ? "AUSSEN / " : "";
-      const suffix = sensor.state === "stale" ? " / ALT" : "";
+      const prefix = sensor.location === "outdoor" ? "OUTDOOR / " : "";
+      const suffix = sensor.state === "stale" ? " / STALE" : "";
       const button = text("button", `${prefix}${sensor.name}${suffix}`);
       button.type = "button";
       button.setAttribute("aria-pressed", !this.hiddenSensors.has(sensor.id));
@@ -301,7 +301,7 @@ export class ClimateView {
     if (!Number.isFinite(min) || plotWidth <= 0) {
       ctx.fillStyle = "#d8cbb0";
       ctx.textAlign = "center";
-      ctx.fillText(history ? "Keine Messpunkte im Zeitraum" : "Messarchiv wird abgefragt ...", width / 2, height / 2);
+      ctx.fillText(history ? "No samples in this period" : "Loading climate history ...", width / 2, height / 2);
       readout.textContent = "";
       return;
     }

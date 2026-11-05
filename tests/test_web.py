@@ -37,6 +37,8 @@ class BrowserRoutes(unittest.TestCase):
                 if route == "/":
                     self.assertIn(b'id="gate-form"', body)
                     self.assertIn(b'id="climate"', body)
+                    self.assertIn(b'<html lang="en">', body)
+                    self.assertIn(b'>7 days</button>', body)
 
     def test_journal_remains_authenticated_and_files_outside_allowlist_are_inaccessible(self):
         with self.assertRaises(ClientError) as rejected:

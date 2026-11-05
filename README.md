@@ -102,7 +102,7 @@ conversation, then speech, then the little body.
 7. **[The Observance Calendar — appearance, routines and memory](docs/behaviour.md)**
 8. **[The Rite of Diagnosis — useful Ubuntu and Pi commands](docs/troubleshooting.md)**
 9. **[The Trial of the Vox — test sound before awakening](docs/audio-check.md)**
-10. **[The Atmospheric Archive — Zigbee, the Klima tab and the LAN browser](docs/climate.md)**
+10. **[The Atmospheric Archive — Zigbee, the Climate tab and the LAN browser](docs/climate.md)**
 
 To retrieve the archive after installing Git:
 

@@ -8,7 +8,7 @@ const player = $("reply-audio");
 const mic = canRecord();
 const sessionKey = "marsi-web-session";
 const HELP = "art | sermon | bless | history | /remember TEXT | /notes | /forget | exit\nF8 or TALK opens the vox. F8 or FINISH seals the recording.";
-const stampFormat = new Intl.DateTimeFormat(undefined, {dateStyle: "short", timeStyle: "short"});
+const stampFormat = new Intl.DateTimeFormat("en-GB", {dateStyle: "short", timeStyle: "short"});
 const state = {generation: 0, journalEpoch: 0, unlocked: false, session: "pi", token: "", tab: "chat", entries: new Map()};
 
 async function request(path, {method = "GET", body, signal, headers, stream = false} = {}) {

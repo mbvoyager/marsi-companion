@@ -99,7 +99,7 @@ class Display:
         tabs = tk.Frame(header, bg=BLACK)
         tabs.grid(row=1, column=0, columnspan=2, sticky="ew", padx=7, pady=(0, 3))
         self.tab_buttons = {}
-        for key, label in (("chat", "[ CHAT ]"), ("climate", "[ KLIMA ]")):
+        for key, label in (("chat", "[ CHAT ]"), ("climate", "[ CLIMATE ]")):
             tab = self.button(tabs, label, lambda key=key: self.select_tab(key))
             tab.configure(fg=GREEN if key == self.tab else BONE)
             tab.pack(side="left", padx=(0, 3))

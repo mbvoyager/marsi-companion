@@ -319,16 +319,16 @@ PY
 The history point count reflects the actual time window and can be zero after
 the sensor has been quiet.
 
-## Open the Klima tab on the Pi
+## Open the Climate tab on the Pi
 
 Update the Pi checkout to the version with the climate display and restart the
 graphical session. A Pi with Marsi autostart enabled can reboot into the new
 display. See the [Pi setup guide](raspberry-pi.md) for the usual start commands.
 
-Choose **KLIMA** above the journal. **Jetzt** shows the temperature, relative
-humidity and time of the latest measurement. **AUSSEN** identifies an outdoor
-sensor and **SIGNAL ALT** marks a stale climate reading. In **3 h**, **24 h** and
-**7 Tage**, the temperature and humidity use separate plots with a shared time
+Choose **CLIMATE** above the journal. **Now** shows the temperature, relative
+humidity and time of the latest measurement. **OUTDOOR** identifies an outdoor
+sensor and **STALE READING** marks an older climate reading. In **3 h**, **24 h** and
+**7 days**, the temperature and humidity use separate plots with a shared time
 axis. Sensor names, colors and line patterns identify the traces. Wide gaps in
 the archive appear as breaks in a trace. A lone sample appears as a dot.
 
@@ -356,7 +356,7 @@ same Marsi token as on the Pi. The default journal session is `pi`. Use the
 value of `MARSI_SESSION` if you chose a different name on the Pi. Browser
 tabs remember their login for the tab's session. **LOCK** or `exit` seals it.
 
-Choose **KLIMA** to view the cards, history and live updates. In a history
+Choose **CLIMATE** to view the cards, history and live updates. In a history
 view, tap a graph to inspect the nearest samples, or use the left and right
 arrow keys when a graph is focused. Tap a sensor in the legend to hide or show
 its trace. **CHAT** uses the shared journal, supports the same typed commands,

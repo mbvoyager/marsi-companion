@@ -30,7 +30,7 @@
     </div>
     <nav id="navigation" class="controls" aria-label="Marsi views" hidden>
       <button id="tab-chat" type="button" aria-pressed="true">[ CHAT ]</button>
-      <button id="tab-climate" type="button" aria-pressed="false">[ KLIMA ]</button>
+      <button id="tab-climate" type="button" aria-pressed="false">[ CLIMATE ]</button>
       <button id="lock" type="button" class="end">LOCK</button>
     </nav>
   </header>
@@ -95,33 +95,33 @@
       </aside>
     </section>
 
-    <section id="climate" class="panel sensorium" lang="de" aria-labelledby="climate-title" hidden>
+    <section id="climate" class="panel sensorium" aria-labelledby="climate-title" hidden>
       <div class="sensorium-header">
         <div>
-          <p class="kicker">[ SENSORIUM // MESSARCHIV ]</p>
-          <h2 id="climate-title">Klima</h2>
+          <p class="kicker">[ SENSORIUM // CLIMATE ARCHIVE ]</p>
+          <h2 id="climate-title">Climate</h2>
         </div>
-        <p id="climate-link" class="seal" role="status">[ VERBINDEN ]</p>
+        <p id="climate-link" class="seal" role="status">[ CONNECTING ]</p>
       </div>
-      <nav class="controls range" aria-label="Zeitfenster">
-        <button type="button" data-period="now" aria-pressed="true">Jetzt</button>
+      <nav class="controls range" aria-label="Time range">
+        <button type="button" data-period="now" aria-pressed="true">Now</button>
         <button type="button" data-period="3h" aria-pressed="false">3 h</button>
         <button type="button" data-period="24h" aria-pressed="false">24 h</button>
-        <button type="button" data-period="7d" aria-pressed="false">7 Tage</button>
+        <button type="button" data-period="7d" aria-pressed="false">7 days</button>
       </nav>
       <p id="climate-message" class="message" role="status"></p>
       <div id="cards" class="sensor-grid"></div>
       <div id="history" hidden>
-        <div id="legend" class="controls legend" aria-label="Sensoren ein- und ausblenden"></div>
-        <p id="inspect-help" class="message">Kurve antippen oder Pfeiltasten nutzen, um Messpunkte abzulesen.</p>
+        <div id="legend" class="controls legend" aria-label="Show or hide sensors"></div>
+        <p id="inspect-help" class="message">Tap a chart or use the arrow keys to inspect a reading.</p>
         <section class="chart" aria-labelledby="temp-title">
-          <h3 id="temp-title">Temperatur <span>°C</span></h3>
-          <canvas id="temperature-chart" tabindex="0" aria-label="Temperaturverlauf" aria-describedby="inspect-help"></canvas>
+          <h3 id="temp-title">Temperature <span>°C</span></h3>
+          <canvas id="temperature-chart" tabindex="0" aria-label="Temperature history" aria-describedby="inspect-help"></canvas>
           <p id="temperature-readout" class="readout" aria-live="polite"></p>
         </section>
         <section class="chart" aria-labelledby="humidity-title">
-          <h3 id="humidity-title">Luftfeuchte <span>% rF</span></h3>
-          <canvas id="humidity-chart" tabindex="0" aria-label="Feuchteverlauf" aria-describedby="inspect-help"></canvas>
+          <h3 id="humidity-title">Humidity <span>% RH</span></h3>
+          <canvas id="humidity-chart" tabindex="0" aria-label="Humidity history" aria-describedby="inspect-help"></canvas>
           <p id="humidity-readout" class="readout" aria-live="polite"></p>
         </section>
       </div>
