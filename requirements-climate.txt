@@ -1,0 +1,2 @@
+# Optional MQTT client for the Ubuntu server and sensor simulator.
+paho-mqtt==2.1.0

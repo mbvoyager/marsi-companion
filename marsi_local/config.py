@@ -48,10 +48,12 @@ class ServerConfig:
     observances: bool = True
     schedule_session: str = "pi"
     morning_hour: int = 7
+    climate_config: Path | None = None
 
     @classmethod
     def from_env(cls, demo: bool = False) -> ServerConfig:
         voice = os.getenv("MARSI_PIPER_MODEL", "")
+        climate = os.getenv("MARSI_CLIMATE_CONFIG", "")
         config = cls(
             ollama_url=validate_url(os.getenv("MARSI_OLLAMA_URL", cls.ollama_url)),
             model=os.getenv("MARSI_MODEL", cls.model),
@@ -68,6 +70,7 @@ class ServerConfig:
             observances=os.getenv("MARSI_OBSERVANCES", "true").lower() == "true",
             schedule_session=os.getenv("MARSI_COMPANION_SESSION", "pi"),
             morning_hour=int(os.getenv("MARSI_MORNING_HOUR", "7")),
+            climate_config=Path(climate).expanduser() if climate else None,
         )
         if not 1 <= config.threads <= 64 or not 1 <= config.timeout <= 600:
             raise ValueError("CPU threads must be 1..64 and timeout must be 1..600 seconds")

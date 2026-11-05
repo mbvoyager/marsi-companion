@@ -8,12 +8,14 @@ import json
 import logging
 import os
 import socket
+import sqlite3
 import threading
 from datetime import datetime
 from urllib.parse import parse_qs, urlsplit
 
 from .config import ServerConfig, load_env, validate_bind
 from .audio_transfer import attach_audio
+from .climate import ClimateConfig, ClimateSubscriber
 from .core import Companion, ServiceError, clean_text, ritual, session_name
 from .speech import MAX_AUDIO_BYTES, Speech, VOICE_CHECK_TEXT
 
@@ -27,6 +29,7 @@ class Server(ThreadingHTTPServer):
     def __init__(self, address, companion):
         self.companion = companion
         self.stopping = threading.Event()
+        self.climate = None
         super().__init__(address, Handler)
 
     def observance_loop(self):
@@ -42,8 +45,22 @@ class Server(ThreadingHTTPServer):
         self.scheduler = threading.Thread(target=self.observance_loop, daemon=True)
         self.scheduler.start()
 
+    def start_climate(self):
+        path = self.companion.config.climate_config
+        if path is None:
+            return
+        try:
+            climate = ClimateSubscriber(ClimateConfig.load(path), self.companion.memory)
+            climate.start()
+        except (OSError, RuntimeError, ValueError, sqlite3.Error) as error:
+            LOG.error("Climate logging unavailable: %s", error)
+        else:
+            self.climate = climate
+
     def server_close(self):
         self.stopping.set()
+        if self.climate is not None:
+            self.climate.close()
         if hasattr(self, "scheduler"):
             self.scheduler.join(timeout=2)
         super().server_close()
@@ -225,6 +242,7 @@ def main():
         app = Companion(config, speech=Speech(config))
         with Server((args.host, args.port), app) as server:
             server.start_observances()
+            server.start_climate()
             LOG.info("Marsi listening on %s:%s (%s)", args.host, args.port, "template demo" if args.demo else config.model)
             server.serve_forever()
     except (ValueError, OSError, ServiceError) as error:

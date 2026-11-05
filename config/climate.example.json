@@ -1,0 +1,16 @@
+{
+  "mqtt": {
+    "host": "127.0.0.1",
+    "port": 1883,
+    "base_topic": "zigbee2mqtt",
+    "username": "marsi",
+    "password_file": "marsi-mqtt-password"
+  },
+  "sensors": {
+    "REPLACE_WITH_DEVICE_TOPIC": {
+      "name": "Forge",
+      "location": "indoor",
+      "color": "#a68b5c"
+    }
+  }
+}

@@ -1,0 +1,283 @@
+# Climate sensors on Ubuntu
+
+The SONOFF coordinator receives the Aqara radio reports. Zigbee2MQTT publishes
+them to Mosquitto, and the Marsi server records selected sensor topics in SQLite.
+Docker runs the two Zigbee services on Ubuntu. Marsi continues to run from its
+existing server environment.
+
+## 1. Recognise the coordinator and install Docker
+
+Plug the dongle into Ubuntu and run `ls -l /dev/serial/by-id/`. Keep the full path
+for the device. It follows the dongle even if Ubuntu assigns a different tty
+number. The **ZBDongle-P** uses `zstack`. The **ZBDongle-E** uses `ember` and needs
+its own adapter settings. [Zigbee2MQTT adapter settings](https://www.zigbee2mqtt.io/guide/configuration/adapter-settings.html)
+
+On Ubuntu 26.04, Docker Engine and Compose are available as `docker.io` and
+`docker-compose-v2`. They take a few hundred MB of disk space. The pinned
+container images include the broker and Zigbee2MQTT's Node.js runtime. For
+Zigbee2MQTT, budget about 1 GB of additional disk space and a few hundred MB of
+RAM. [Docker image guide](https://www.zigbee2mqtt.io/guide/installation/02_docker.html)
+
+```bash
+sudo apt update
+sudo apt install docker.io docker-compose-v2
+systemctl is-active docker
+sudo docker version --format '{{.Server.Version}}'
+sudo docker compose version
+```
+
+Expect `active` and two version numbers. The following steps use
+`~/marsi-climate` as a private directory outside the checkout. The coordinator
+backup and broker credentials belong there.
+
+## 2. Start Mosquitto
+
+For a fresh setup, create the directory and its broker configuration.
+
+```bash
+mkdir -m 700 ~/marsi-climate && cd ~/marsi-climate && mkdir -m 755 mosquitto
+cat > compose.yaml <<'EOF'
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2.1.2-alpine
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:1883:1883"
+    volumes:
+      - ./mosquitto:/mosquitto/config:ro
+      - mosquitto-data:/mosquitto/data
+
+volumes:
+  mosquitto-data:
+EOF
+cat > mosquitto/mosquitto.conf <<'EOF'
+listener 1883
+allow_anonymous false
+plugin /usr/lib/mosquitto_password_file.so
+plugin_opt_password_file /mosquitto/config/passwd
+persistence true
+persistence_location /mosquitto/data/
+log_dest stdout
+EOF
+```
+
+Create the broker account once. `-c` creates the password file, so use it only
+for the initial setup. Enter a dedicated MQTT password and keep it for the next
+steps. [Mosquitto password tool](https://mosquitto.org/man/mosquitto_passwd-1.html)
+
+```bash
+sudo docker compose run --rm --no-deps \
+  -v "$PWD/mosquitto:/setup" mosquitto sh -ec '
+    mosquitto_passwd -c /setup/passwd marsi
+    chown 1883:1883 /setup/passwd
+    chmod 600 /setup/passwd
+  '
+sudo docker compose up -d mosquitto
+sudo docker compose ps
+```
+
+Mosquitto should be `Up` and publish `127.0.0.1:1883->1883/tcp`. The host port
+is local to Ubuntu. Services in the Compose project use `mosquitto:1883` on
+their shared network. [Docker port publishing](https://docs.docker.com/engine/network/port-publishing/)
+
+## 3. Start Zigbee2MQTT
+
+In `~/marsi-climate`, make the `zigbee2mqtt` directory with
+`mkdir -m 700 zigbee2mqtt`. Save this as `compose.override.yaml` beside
+`compose.yaml`, substituting the full path from step 1 for the host device path.
+Compose loads both files automatically.
+
+```yaml
+services:
+  zigbee2mqtt:
+    image: ghcr.io/koenkk/zigbee2mqtt:2.14.3
+    restart: unless-stopped
+    depends_on:
+      - mosquitto
+    devices:
+      - "/dev/serial/by-id/REPLACE_WITH_DEVICE_PATH:/dev/ttyUSB0"
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./zigbee2mqtt:/app/data
+    environment:
+      TZ: Europe/Berlin
+```
+
+Save this as `zigbee2mqtt/configuration.yaml` for a fresh ZBDongle-P setup. The
+running service replaces `GENERATE` with the new network identifiers and key.
+Keep its data directory when updating or restarting so the sensors stay paired.
+`cache_state: false` passes through individual updates. `last_seen` gives them
+explicit timestamps.
+
+```yaml
+version: 5
+mqtt:
+  server: mqtt://mosquitto:1883
+  base_topic: zigbee2mqtt
+  user: marsi
+  password: '!secret.yaml mqtt_password'
+serial:
+  port: /dev/ttyUSB0
+  adapter: zstack
+frontend:
+  enabled: true
+advanced:
+  network_key: GENERATE
+  pan_id: GENERATE
+  ext_pan_id: GENERATE
+  last_seen: ISO_8601
+  cache_state: false
+  enable_external_js: false
+```
+
+Save the same MQTT password in the local Zigbee2MQTT secret file. The input is
+hidden. [Zigbee2MQTT secret file](https://www.zigbee2mqtt.io/guide/configuration/mqtt.html#specifying-mqtt-server-user-password-and-network-key-in-a-different-file)
+
+```bash
+(
+  umask 077
+  python3 - <<'PY'
+from getpass import getpass
+import json
+from pathlib import Path
+
+password = getpass("MQTT password for marsi: ")
+if not password:
+    raise SystemExit("Enter the MQTT password you chose in step 2.")
+Path("zigbee2mqtt/secret.yaml").write_text(
+    f"mqtt_password: {json.dumps(password, ensure_ascii=False)}\n",
+    encoding="utf-8",
+)
+PY
+)
+sudo docker compose config --quiet
+sudo docker compose up -d zigbee2mqtt
+```
+
+After about 30 seconds, run `sudo docker compose ps -a` and
+`sudo docker compose logs --tail=40 zigbee2mqtt`. Both containers should be `Up`.
+Look for `Connected to MQTT server` and `Zigbee2MQTT started!`. If startup fails,
+use the first error in the logs to distinguish adapter access from broker login.
+
+## 4. Pair and verify the first sensor
+
+Keep the sensor near the coordinator. Remove the battery tab if present.
+On Ubuntu, run the command below and enter the same MQTT password. It opens the
+coordinator for 120 seconds and reads events and sensor reports from Mosquitto.
+[Zigbee2MQTT permit-join command](https://www.zigbee2mqtt.io/guide/usage/mqtt_topics_and_messages.html#zigbee2mqtt-bridge-request-permit-join)
+
+```bash
+sudo docker run --rm -it --network host --tmpfs /tmp --entrypoint sh \
+  eclipse-mosquitto:2.1.2-alpine -ec '
+    umask 077
+    printf "MQTT password: "
+    read -rs mqtt_pass
+    printf "\n"
+    printf "%s\n" "-h 127.0.0.1" "-u marsi" "-P $mqtt_pass" > /tmp/mqtt.conf
+    unset mqtt_pass
+    reply=$(mosquitto_rr -o /tmp/mqtt.conf -V mqttv311 -q 1 -W 10 \
+      -t zigbee2mqtt/bridge/request/permit_join \
+      -e zigbee2mqtt/bridge/response/permit_join \
+      -m "{\"time\":120,\"device\":\"coordinator\"}")
+    printf "%s\n" "$reply"
+    printf "%s\n" "$reply" | grep -q "\"status\":\"ok\""
+    printf "Joining open. Pair the sensor now.\n"
+    mosquitto_sub -o /tmp/mqtt.conf -v -W 150 \
+      -t zigbee2mqtt/bridge/event -t "zigbee2mqtt/+"
+  '
+```
+
+When the prompt says `Joining open`, hold the WSDCGQ11LM button for about five
+seconds and release it as soon as the blue LED blinks. Look for `device_interview`
+with `status` set to `successful`, then `temperature` and `humidity` reports.
+The sensor can send these in separate messages. Copy the topic suffix after
+`zigbee2mqtt/` for your local configuration. The test can be stopped with Ctrl+C
+once both values appear. [Aqara WSDCGQ11LM pairing](https://www.zigbee2mqtt.io/devices/WSDCGQ11LM.html#pairing)
+
+## 5. Archive readings in Marsi
+
+In the Marsi checkout on Ubuntu, install the small Paho MQTT client in the
+existing server virtual environment. It is a Python library used by the server
+to subscribe and reconnect. [Paho MQTT 2.1.0](https://pypi.org/project/paho-mqtt/2.1.0/)
+
+```bash
+cd ~/marsi-companion
+.venv-server/bin/python -m pip install -r requirements-climate.txt
+cp -i config/climate.example.json ~/marsi-climate/marsi.json
+nano ~/marsi-climate/marsi.json
+```
+
+Replace `REPLACE_WITH_DEVICE_TOPIC` with the exact suffix you saw in step 4.
+Sensor IDs use letters, numbers, underscores or hyphens. Set `name` and
+`location` (`indoor` or `outdoor`). `color` is an optional `#RRGGBB` value.
+Additional sensors are entries in the same `sensors` object. Keep their keys
+stable so their history follows them when you change a display name.
+
+Write the password for the Marsi MQTT client. The file is relative to `marsi.json`
+and only needs to be readable by the Ubuntu user who runs `marsi-server`.
+
+```bash
+(
+  umask 077
+  .venv-server/bin/python - <<'PY'
+from getpass import getpass
+from pathlib import Path
+
+password = getpass("MQTT password for marsi: ")
+if not password:
+    raise SystemExit("Enter the MQTT password you chose in step 2.")
+(Path.home() / "marsi-climate" / "marsi-mqtt-password").write_text(password + "\n", encoding="utf-8")
+PY
+)
+```
+
+Add this line to your existing `.env.server` and save it.
+
+```dotenv
+MARSI_CLIMATE_CONFIG=~/marsi-climate/marsi.json
+```
+
+Restart the server to apply the configuration and check its log.
+
+```bash
+systemctl --user restart marsi-server
+journalctl --user -u marsi-server -n 30 --no-pager
+```
+
+`Climate MQTT subscribed to 1 sensor topic(s)` confirms the broker subscription
+for one sensor. After the sensor sends fresh readings, read back the database
+from the same checkout.
+
+```bash
+.venv-server/bin/python -m marsi_local.climate --check
+```
+
+The diagnostic prints the latest stored value and UTC timestamp for each
+metric. A sleeping battery sensor can take a while to report again. Battery and
+link quality are recorded when present. Each metric keeps its own timestamp in
+`climate_readings` inside the existing companion database. Replayed retained
+snapshots are skipped and repeated writes for the same sensor, metric and
+millisecond use one row. An update without `last_seen` uses the arrival time.
+The archive records reports that reach Marsi while its subscriber is running.
+
+## Simulate more sensors
+
+Add entries to the `sensors` object in your local `marsi.json`, such as these two.
+
+```json
+{
+  "sim-workbench": {"name": "Simulated workbench", "location": "indoor", "color": "#a68b5c"},
+  "sim-exterior": {"name": "Simulated exterior", "location": "outdoor", "color": "#9fbf97"}
+}
+```
+
+Restart `marsi-server` to pick up the new topic subscriptions. Once the log
+confirms the subscriptions, run the simulator from the Marsi checkout. It
+sends one batch to every configured `sim-` sensor through the same broker and
+storage path. For a continuous test, add `--interval 15` and use Ctrl+C to stop.
+
+```bash
+.venv-server/bin/python -m marsi_local.climate --simulate
+.venv-server/bin/python -m marsi_local.climate --check
+```
