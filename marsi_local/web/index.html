@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#090708">
+  <title>Marsi // Archivum Martis</title>
+  <link rel="stylesheet" href="/web/marsi.css">
+  <script type="module" src="/web/marsi.mjs"></script>
+</head>
+<body>
+  <header class="masthead">
+    <svg class="electoo" width="100%" height="32" aria-hidden="true">
+      <defs>
+        <pattern id="cog-traces" width="112" height="32" patternUnits="userSpaceOnUse">
+          <g fill="none" stroke="#a68b5c">
+            <path d="M0 2H112M0 29H112" stroke="#b34d43"/>
+            <path d="M22 8H57L68 20H100M22 12H54L65 24H100M22 16H51L62 28H100"/>
+            <circle cx="12" cy="16" r="8"/><circle cx="12" cy="16" r="4"/>
+            <path d="M12 5v4m0 14v4M1 16h4m14 0h4M4 8l3 3m10 10 3 3M4 24l3-3m10-10 3-3"/>
+            <circle cx="104" cy="20" r="4"/><path d="M104 13v3m0 8v3m-7-7h3m8 0h3"/>
+          </g>
+        </pattern>
+      </defs>
+      <rect width="100%" height="32" fill="url(#cog-traces)"/>
+    </svg>
+    <div class="masthead-row">
+      <h1>MARSI <span>// ARCHIVUM MARTIS</span></h1>
+      <p id="link" class="seal" role="status">[ ARCHIVE SEALED ]</p>
+    </div>
+    <nav id="navigation" class="controls" aria-label="Marsi views" hidden>
+      <button id="tab-chat" type="button" aria-pressed="true">[ CHAT ]</button>
+      <button id="tab-climate" type="button" aria-pressed="false">[ KLIMA ]</button>
+      <button id="lock" type="button" class="end">LOCK</button>
+    </nav>
+  </header>
+
+  <main>
+    <section id="gate" class="panel gate" aria-labelledby="gate-title">
+      <p class="kicker">[ TERRA // LOCAL UPLINK ]</p>
+      <h2 id="gate-title">Open the archive</h2>
+      <p>Greetings, little keeper. Present the token from your Marsi configuration to open the journal and climate records.</p>
+      <form id="gate-form">
+        <label for="token">Marsi token</label>
+        <input id="token" type="password" autocomplete="off" spellcheck="false" autocapitalize="off">
+        <label for="session">Journal session</label>
+        <input id="session" type="text" value="pi" maxlength="64" spellcheck="false" autocapitalize="off" required>
+        <button type="submit" id="connect">OPEN ARCHIVE</button>
+      </form>
+      <p id="gate-status" class="message" role="status"></p>
+    </section>
+
+    <section id="chat" class="chat-layout" aria-label="Marsi's journal" hidden>
+      <div class="panel journal-panel">
+        <div class="controls journal-tools">
+          <button id="older" type="button" disabled>OLDER TRANSMISSIONS</button>
+          <button id="latest" type="button" class="end">LATEST</button>
+        </div>
+        <div id="journal" class="journal" role="log" aria-label="Saved transmissions" tabindex="0"></div>
+        <p id="chat-status" class="message" role="status">[ ARCHIVE ] F8 to talk.</p>
+        <form id="chat-form" class="controls">
+          <label class="sr-only" for="message">Message for Marsi</label>
+          <span aria-hidden="true">&gt;</span>
+          <input id="message" maxlength="2000" placeholder="Bring me an observation, little keeper." autocomplete="off">
+          <button id="send" type="submit">SEND</button>
+          <button id="talk" type="button" title="F8">TALK</button>
+        </form>
+        <div class="controls chat-actions">
+          <label><input id="voice" type="checkbox"> Voice</label>
+          <label><input id="idle" type="checkbox"> Idle rites</label>
+          <button type="button" data-command="art">ART</button>
+          <button type="button" data-command="bless">BLESS</button>
+          <button type="button" data-command="help">HELP</button>
+        </div>
+        <p id="vox-hint" class="message" hidden></p>
+        <audio id="reply-audio" controls preload="none" aria-label="Marsi's voice" hidden></audio>
+      </div>
+      <aside class="panel relic" aria-label="Marsi and machine readings">
+        <p class="kicker">[ MARSI / MARS RELIQUARY ]</p>
+        <pre class="portrait" aria-hidden="true">
+         .--.  .--.
+    _.-==|  |==|  |==-._
+  .'     .--------.     '.
+ [::]---/ .------. \---[::]
+   ||  |  | o  o |  |  ||
+  &lt;==&gt; |  |  /\  |  | &lt;==&gt;
+   ||  |  \_||||_/  |  ||
+ [::]---\   |__|   /---[::]
+  '._    '--------'    _.'
+     '-==|__|==|__|==-'
+          ||    ||
+       o==[]====[]==o</pre>
+        <p class="kicker">MARS // SEEK KNOWLEDGE</p>
+        <pre id="telemetry" class="telemetry">[ AWAITING MACHINE READINGS ]</pre>
+      </aside>
+    </section>
+
+    <section id="climate" class="panel sensorium" lang="de" aria-labelledby="climate-title" hidden>
+      <div class="sensorium-header">
+        <div>
+          <p class="kicker">[ SENSORIUM // MESSARCHIV ]</p>
+          <h2 id="climate-title">Klima</h2>
+        </div>
+        <p id="climate-link" class="seal" role="status">[ VERBINDEN ]</p>
+      </div>
+      <nav class="controls range" aria-label="Zeitfenster">
+        <button type="button" data-period="now" aria-pressed="true">Jetzt</button>
+        <button type="button" data-period="3h" aria-pressed="false">3 h</button>
+        <button type="button" data-period="24h" aria-pressed="false">24 h</button>
+        <button type="button" data-period="7d" aria-pressed="false">7 Tage</button>
+      </nav>
+      <p id="climate-message" class="message" role="status"></p>
+      <div id="cards" class="sensor-grid"></div>
+      <div id="history" hidden>
+        <div id="legend" class="controls legend" aria-label="Sensoren ein- und ausblenden"></div>
+        <p id="inspect-help" class="message">Kurve antippen oder Pfeiltasten nutzen, um Messpunkte abzulesen.</p>
+        <section class="chart" aria-labelledby="temp-title">
+          <h3 id="temp-title">Temperatur <span>°C</span></h3>
+          <canvas id="temperature-chart" tabindex="0" aria-label="Temperaturverlauf" aria-describedby="inspect-help"></canvas>
+          <p id="temperature-readout" class="readout" aria-live="polite"></p>
+        </section>
+        <section class="chart" aria-labelledby="humidity-title">
+          <h3 id="humidity-title">Luftfeuchte <span>% rF</span></h3>
+          <canvas id="humidity-chart" tabindex="0" aria-label="Feuchteverlauf" aria-describedby="inspect-help"></canvas>
+          <p id="humidity-readout" class="readout" aria-live="polite"></p>
+        </section>
+      </div>
+    </section>
+  </main>
+  <footer class="kicker">// THE COG TURNS · THE LITTLE ONE KEEPS YOU COMPANY //</footer>
+</body>
+</html>

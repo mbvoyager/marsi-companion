@@ -336,6 +336,122 @@ The tab opens a live stream using the Pi's existing Marsi URL and token. New
 measurements update the view as they arrive. **LINK PAUSE** indicates the feed
 will retry. **CHAT** returns to the journal and **F8** opens it for voice input.
 
+## Open Marsi in a browser on the LAN
+
+Update the Ubuntu checkout to the version with the web interface and restart
+`marsi-server`. The same process serves the browser assets, JSON API and live
+climate stream. The existing systemd service listens on all IPv4 interfaces
+on port `8765`.
+
+```bash
+cd ~/marsi-companion
+systemctl --user restart marsi-server
+curl -fsS http://127.0.0.1:8765/health
+hostname -I
+```
+
+Use the Ubuntu LAN IPv4 address that the Pi connects to. With the phone on
+the same Wi-Fi, open `http://UBUNTU-LAN-IP:8765/` in its browser. Enter the
+same Marsi token as on the Pi. The default journal session is `pi`. Use the
+value of `MARSI_SESSION` if you chose a different name on the Pi. Browser
+tabs remember their login for the tab's session. **LOCK** or `exit` seals it.
+
+Choose **KLIMA** to view the cards, history and live updates. In a history
+view, tap a graph to inspect the nearest samples, or use the left and right
+arrow keys when a graph is focused. Tap a sensor in the legend to hide or show
+its trace. **CHAT** uses the shared journal, supports the same typed commands,
+and shows readings from Ubuntu and the Pi. Enable **Voice** for spoken
+replies. Use the audio player's Play control if the browser waits for a tap.
+Scheduled entries are visible in the journal. Browser playback depends on
+the page being open and the browser's media permission.
+
+Keep ports `8765` and `8766` within the trusted LAN. Use the subnet-scoped
+firewall rules in the [Ubuntu guide](ubuntu-server.md) if UFW is active and
+keep router port forwarding disabled for both ports.
+
+### Enable the browser microphone with local HTTPS
+
+The browser can capture microphone audio from a trusted HTTPS origin. The
+optional TLS listener uses the same Marsi process and journal. It defaults to
+port `8766`, alongside the existing `8765` listener. It uses Python's built-in
+TLS support. OpenSSL is used here to create a local certificate authority and
+a server certificate. [Browser microphone requirements](https://www.w3.org/TR/mediacapture-streams/)
+
+Check `openssl version` on Ubuntu first. For a fresh TLS setup, create a
+private directory and enter the server's LAN IPv4 address when asked. The
+certificate identifies that address, so use the address that the phone will
+open. [OpenSSL certificate tool](https://docs.openssl.org/3.5/man1/openssl-req/)
+
+```bash
+mkdir -m 700 ~/marsi-climate/tls && cd ~/marsi-climate/tls
+```
+
+```bash
+(
+  set -eu
+  umask 077
+  read -r -p 'Ubuntu LAN IPv4 address: ' marsi_ip
+  python3 -c 'import ipaddress, sys; ipaddress.IPv4Address(sys.argv[1])' "$marsi_ip"
+
+  openssl req -x509 -newkey rsa:3072 -noenc -sha256 -days 3650 \
+    -subj '/CN=Marsi LAN Root' \
+    -addext 'basicConstraints=critical,CA:TRUE,pathlen:0' \
+    -addext 'keyUsage=critical,keyCertSign,cRLSign' \
+    -keyout marsi-ca.key -out marsi-ca.crt
+
+  openssl req -new -newkey rsa:2048 -noenc -sha256 \
+    -subj '/CN=Marsi LAN' -keyout marsi.key -out marsi.csr
+
+  cat > marsi-tls.ext <<EOF
+basicConstraints=critical,CA:FALSE
+keyUsage=critical,digitalSignature,keyEncipherment
+extendedKeyUsage=serverAuth
+subjectAltName=IP:$marsi_ip
+EOF
+
+  openssl x509 -req -in marsi.csr -CA marsi-ca.crt -CAkey marsi-ca.key \
+    -CAcreateserial -days 180 -sha256 -extfile marsi-tls.ext -out marsi.crt
+  openssl verify -CAfile marsi-ca.crt -purpose sslserver -verify_ip "$marsi_ip" marsi.crt
+)
+```
+
+Expect `marsi.crt: OK`. Keep the signing key `marsi-ca.key` and server key
+`marsi.key` private. The public `marsi-ca.crt` is the file to transfer to a
+phone or computer you control so it can verify the server certificate. Renew
+the server certificate before it expires with the same CA to retain the
+phone's trust settings.
+
+Add these lines to the existing `.env.server` in `~/marsi-companion`.
+
+```dotenv
+MARSI_WEB_TLS_CERT=~/marsi-climate/tls/marsi.crt
+MARSI_WEB_TLS_KEY=~/marsi-climate/tls/marsi.key
+MARSI_WEB_HTTPS_PORT=8766
+```
+
+Restart `marsi-server` and check that its journal includes
+`Marsi browser HTTPS listening on 0.0.0.0:8766`. On Ubuntu, substitute the
+same IPv4 address as in the certificate and verify HTTPS with the public CA.
+[OpenSSL certificate verification](https://docs.openssl.org/3.5/man1/openssl-verify/)
+
+```bash
+systemctl --user restart marsi-server
+journalctl --user -u marsi-server -n 15 --no-pager
+curl --cacert ~/marsi-climate/tls/marsi-ca.crt https://UBUNTU-LAN-IP:8766/health
+```
+
+On iOS, install the CA profile and enable trust for it in **Settings →
+General → About → Certificate Trust Settings**. On Android, look for
+**Install a certificate → CA certificate** in the device's security and
+credential settings. Select the public `marsi-ca.crt` file. Menu wording can
+vary by device. [Apple certificate trust](https://support.apple.com/102390), [Android certificate settings](https://support.google.com/pixelphone/answer/2844832)
+
+Open `https://UBUNTU-LAN-IP:8766/` on the trusted device and unlock the
+archive. Choose **CHAT**, press **TALK** or **F8**, and grant microphone
+permission. Press **FINISH** to send the recording, or let the recording
+finish after 15 seconds. The browser sends a complete WAV in memory. Marsi
+stores the recognised conversation in the same journal as typed turns.
+
 ## Simulate more sensors
 
 Add entries to the `sensors` object in your local `marsi.json`, such as these two.

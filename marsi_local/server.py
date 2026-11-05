@@ -7,8 +7,10 @@ import hmac
 import json
 import logging
 import os
+from pathlib import Path
 import socket
 import sqlite3
+import ssl
 import threading
 from datetime import datetime
 from urllib.parse import parse_qs, urlsplit
@@ -21,18 +23,38 @@ from .speech import MAX_AUDIO_BYTES, Speech, VOICE_CHECK_TEXT
 
 LOG = logging.getLogger("marsi.local")
 CLIMATE_HEARTBEAT_SECONDS = 15
+WEB_DIRECTORY = Path(__file__).with_name("web")
+WEB_ASSETS = {
+    "/": ("index.html", "text/html; charset=utf-8"),
+    "/web/marsi.css": ("marsi.css", "text/css; charset=utf-8"),
+    "/web/marsi.mjs": ("marsi.mjs", "text/javascript; charset=utf-8"),
+    "/web/climate.mjs": ("climate.mjs", "text/javascript; charset=utf-8"),
+    "/web/vox.mjs": ("vox.mjs", "text/javascript; charset=utf-8"),
+    "/web/recorder.js": ("recorder.js", "text/javascript; charset=utf-8"),
+}
 
 
 class Server(ThreadingHTTPServer):
     daemon_threads = True
     request_queue_size = 8
 
-    def __init__(self, address, companion):
+    def __init__(self, address, companion, *, shared=None, tls=None):
         self.companion = companion
-        self.stopping = threading.Event()
-        self.climate = None
-        self.climate_streams = threading.BoundedSemaphore(8)
+        self.shared, self.tls = shared, tls
+        self.stopping = shared.stopping if shared else threading.Event()
+        self.climate = shared.climate if shared else None
+        self.climate_streams = shared.climate_streams if shared else threading.BoundedSemaphore(8)
         super().__init__(address, Handler)
+
+    def get_request(self):
+        connection, address = super().get_request()
+        if self.tls is not None:
+            try:
+                connection = self.tls.wrap_socket(connection, server_side=True, do_handshake_on_connect=False)
+            except OSError:
+                connection.close()
+                raise
+        return connection, address
 
     def observance_loop(self):
         while not self.stopping.is_set():
@@ -60,13 +82,14 @@ class Server(ThreadingHTTPServer):
             self.climate = climate
 
     def server_close(self):
-        self.stopping.set()
-        if self.climate is not None:
-            with self.climate.archive.updates:
-                self.climate.archive.updates.notify_all()
-            self.climate.close()
-        if hasattr(self, "scheduler"):
-            self.scheduler.join(timeout=2)
+        if self.shared is None:
+            self.stopping.set()
+            if self.climate is not None:
+                with self.climate.archive.updates:
+                    self.climate.archive.updates.notify_all()
+                self.climate.close()
+            if hasattr(self, "scheduler"):
+                self.scheduler.join(timeout=2)
         super().server_close()
 
 
@@ -95,6 +118,21 @@ class Handler(BaseHTTPRequestHandler):
         provided = self.headers.get("Authorization", "")
         if token and not hmac.compare_digest(provided.encode(), ("Bearer " + token).encode()):
             raise ServiceError("A valid Marsi token is required.", 401)
+
+    def web_asset(self, path):
+        filename, mime = WEB_ASSETS[path]
+        body = (WEB_DIRECTORY / filename).read_bytes()
+        self.send_response(200)
+        self.send_header("Content-Type", mime)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("Permissions-Policy", "microphone=(self), camera=(), geolocation=()")
+        self.send_header("Content-Security-Policy", "default-src 'self'; connect-src 'self'; media-src 'self' blob:; "
+                         "object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
+        self.end_headers()
+        self.wfile.write(body)
 
     def stream_climate(self, archive):
         slots = self.server.climate_streams
@@ -165,6 +203,8 @@ class Handler(BaseHTTPRequestHandler):
             app = self.server.companion
             if method == "GET" and path == "/health":
                 return self.respond(200, {"status": "ok", "mode": "demo" if app.config.demo else "local-llm"})
+            if method == "GET" and path in WEB_ASSETS:
+                return self.web_asset(path)
             self.authenticated()
             if method == "GET" and path in ("/v1/climate/now", "/v1/climate/history", "/v1/climate/events"):
                 if self.server.climate is None:
@@ -273,6 +313,29 @@ class Handler(BaseHTTPRequestHandler):
         self.dispatch("DELETE")
 
 
+def start_web_https(primary: Server, host: str) -> Server | None:
+    cert = os.getenv("MARSI_WEB_TLS_CERT", "")
+    key = os.getenv("MARSI_WEB_TLS_KEY", "")
+    if not cert and not key:
+        return None
+    try:
+        if not cert or not key:
+            raise ValueError("Set both MARSI_WEB_TLS_CERT and MARSI_WEB_TLS_KEY")
+        port = int(os.getenv("MARSI_WEB_HTTPS_PORT", "8766"))
+        if not 1 <= port <= 65535:
+            raise ValueError("MARSI_WEB_HTTPS_PORT must be 1..65535")
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
+        context.load_cert_chain(Path(cert).expanduser(), Path(key).expanduser(), password="")
+        listener = Server((host, port), primary.companion, shared=primary, tls=context)
+    except (OSError, ValueError) as error:
+        LOG.warning("Marsi HTTPS unavailable: %s", error)
+        return None
+    threading.Thread(target=listener.serve_forever, name="marsi-https", daemon=True).start()
+    LOG.info("Marsi browser HTTPS listening on %s:%s", host, port)
+    return listener
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--env", default=".env.server")
@@ -292,7 +355,13 @@ def main():
             server.start_observances()
             server.start_climate()
             LOG.info("Marsi listening on %s:%s (%s)", args.host, args.port, "template demo" if args.demo else config.model)
-            server.serve_forever()
+            https = start_web_https(server, args.host)
+            try:
+                server.serve_forever()
+            finally:
+                if https is not None:
+                    https.shutdown()
+                    https.server_close()
     except (ValueError, OSError, ServiceError) as error:
         parser.exit(1, f"Cannot start Marsi: {error}\n")
     except KeyboardInterrupt:
