@@ -225,7 +225,8 @@ class DisplayStartupTests(unittest.TestCase):
         # Model a display wake-up that clears its cursor. This is a startup
         # regression test, not a claim to emulate a particular Pi GPU driver.
         with tempfile.TemporaryDirectory() as folder, \
-                patch.dict(os.environ, {"MARSI_PI_STATE_DIR": folder, "MARSI_RITUALS": "false"}):
+                patch.dict(os.environ, {"MARSI_PI_STATE_DIR": folder, "MARSI_RITUALS": "false",
+                                        "MARSI_CURSOR": "native"}):
             root = tk.Tk()
             root.withdraw()
             screen = Mock()

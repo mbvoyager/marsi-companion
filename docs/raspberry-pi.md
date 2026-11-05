@@ -111,14 +111,12 @@ startx "$HOME/marsi-companion/deploy/marsi-xsession.sh"
 Run this on the physical console; `startx` over a normal SSH connection is not
 the same as launching a local graphical session.
 
-Marsi uses a green/red mechanical crosshair pointer on X11. If an older
-installation hides the pointer, [refresh the Lite startup block and reboot](quickstart.md#3-start-the-display-manually)
-to remove the old `-nocursor` option. The pointer uses the window system, with
-no extra animation or mouse polling; typing, text selection and clicks are
-unchanged. Windows/macOS development uses a standard visible crosshair.
-At startup, screen power settings are prepared before the interface, and the
-reticle is reapplied after the window becomes visible. If it is missing only
-after automatic boot, see [startup cursor diagnosis](troubleshooting.md#pi-display-and-boot).
+Marsi draws the green/red mechanical crosshair over its X11 windows. The small
+reticle follows pointer events, and X11 passes clicks and drags through to the
+widgets below it. If the drawn reticle is unavailable, Marsi uses the native
+X11 crosshair. Windows and macOS use their standard crosshair.
+For cursor diagnostics and the `MARSI_CURSOR=native` setting, see the
+[Pi display troubleshooting guide](troubleshooting.md#screen-and-pointer-checks).
 
 On an existing desktop, open a terminal in the project directory and run:
 

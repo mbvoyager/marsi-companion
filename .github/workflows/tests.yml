@@ -20,10 +20,11 @@ jobs:
       - run: python -m unittest discover -s tests -v
       - run: python -m compileall -q marsi_local
       - run: for script in scripts/*.sh deploy/marsi-xsession.sh; do bash -n "$script"; done
-      - run: sudo apt-get update && sudo apt-get install -y python3-tk xvfb alsa-utils x11-xserver-utils
+      - run: sudo apt-get update && sudo apt-get install -y python3-tk xvfb alsa-utils x11-xserver-utils libxtst6
       - run: python -m unittest tests.audio_playback_smoke -v
       - run: xvfb-run -a python -m tests.pi_display_smoke
       - run: xvfb-run -a python -m unittest tests.display_transmission_smoke tests.screen_smoke -v
+      - run: xvfb-run -a -s "-screen 0 800x600x24 -nocursor" python -m unittest tests.drawn_pointer_smoke -v
   speech-decoder:
     runs-on: ubuntu-latest
     strategy:

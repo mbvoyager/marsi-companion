@@ -1,13 +1,14 @@
-"""Native two-colour X11 reticle; no animation, polling or input interception."""
+"""Install the reticle with a native pointer fallback."""
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 
 from .electoo import GREEN, RED
 
 
-def install_reticle(root):
+def install_reticle(root, *, drawn=False):
     """Keep the same centred pointer over the archive, entry and controls."""
     import tkinter as tk
     cursor = "crosshair"  # Portable development fallback for Windows/macOS.
@@ -20,6 +21,14 @@ def install_reticle(root):
         except tk.TclError:
             logging.getLogger("marsi.local.display").warning("Custom pointer unavailable; using the native crosshair.")
             cursor = ("crosshair", GREEN, RED)
+        if drawn and os.getenv("MARSI_CURSOR") != "native" and not os.getenv("WAYLAND_DISPLAY"):
+            from .drawn_pointer import DrawnReticle
+            try:
+                root.drawn_reticle = DrawnReticle(root, assets)
+            except (OSError, RuntimeError, AttributeError, tk.TclError) as error:
+                logging.getLogger("marsi.local.display").warning("Drawn reticle unavailable (%s); using the native pointer.", error)
+            else:
+                cursor = "none"
     root.configure(cursor=cursor)
     root.option_add("*Cursor", cursor)
 

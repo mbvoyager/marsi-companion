@@ -145,12 +145,17 @@ startup option. After pulling the current Pi code, run
 updates the managed profile block; it does not change audio settings or OS
 autologin. See the [pointer update steps](quickstart.md#3-start-the-display-manually).
 
-Marsi prepares screen power settings before opening its interface, then
-reasserts the reticle after the window is mapped. These startup safeguards do
-not prove that X11's graphics driver actually displays its cursor. If the
-pointer is still invisible after boot but appears after a manual launch, use
-the checks below before changing more startup code. An older `-nocursor` entry
-must still be migrated with the installer above.
+On X11, Marsi now draws its reticle in an application window with an empty
+input region. This lets X11 deliver clicks and drags to the underlying widgets.
+If the pointer still fails, check the display log for a fallback message.
+
+```bash
+grep -i 'drawn reticle' ~/marsi-companion/data/pi-display.log | tail -n 10
+```
+
+To select the native cursor for diagnosis, set `MARSI_CURSOR=native` in
+`~/marsi-companion/.env.pi` and reopen Marsi. Remove that line to select the
+drawn reticle again. The setting applies only to Marsi.
 
 For diagnosis, run these **while the automatically started, affected display is
 still open**, then record the exact manual start command that restores it:

@@ -20,7 +20,7 @@ built, understood and repaired.
 | `marsi_local/language.py` | Offline English/German reply gate and context filtering |
 | `marsi_local/lore.py`, `lore.json` | Local canon reference and topic selection |
 | `marsi_local/electoo.py` | Cached circuitry, skull effigy and moving signals |
-| `marsi_local/pointer.py`, `marsi_local/assets/` | Native X11 reticle cursor and source/mask bitmaps |
+| `marsi_local/pointer.py`, `drawn_pointer.py`, `assets/` | Drawn X11 reticle, native fallback and shared bitmaps |
 | `marsi_local/core.py` | Ollama, durable journal, working context, notes and recall |
 | `marsi_local/speech.py` | Optional Whisper/Piper loading and WAV validation |
 | `marsi_local/server.py` | Authenticated HTTP endpoints |
@@ -174,6 +174,11 @@ ordering; it does not emulate the Pi's graphics driver or a Wayland compositor.
 The mapping test clears the cursor in an earlier map handler and verifies that
 the idle callback restores the reticle over controls as well as the root. This
 is a finite event-driven update, without pointer polling or input interception.
+
+The drawn-pointer smoke test runs under Xvfb with the server cursor disabled.
+It samples the painted reticle pixels and sends real X11 mouse events through
+the reticle to a button and a text field. It also checks fallback when the
+X11 libraries are unavailable. The test needs `libxtst6` for event generation.
 
 ## Next milestones
 

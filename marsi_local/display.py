@@ -26,7 +26,7 @@ RETRY_DELAYS = (1, 2, 4, 8)
 
 
 class Display:
-    def __init__(self, root, client, windowed=False):
+    def __init__(self, root, client, windowed=False, *, drawn_cursor=False):
         import tkinter as tk
         from tkinter import font as tkfont
         self.tk, self.root, self.client = tk, root, client
@@ -182,7 +182,7 @@ class Display:
                        "Mars reliquary -> near-side Terra\n"
                        "Bring me an observation, little keeper.\nType help for the local command cant.")
         self.resize()
-        self.pointer_cursor = install_reticle(root)
+        self.pointer_cursor = install_reticle(root, drawn=drawn_cursor)
         self.input.focus_set()
         root.after(50, self.tick)
 

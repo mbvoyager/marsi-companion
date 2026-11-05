@@ -28,8 +28,8 @@ readable. Red belongs to the forge, its bands and its controls.
 
 The mouse pointer is an original mechanical reticle: a green central aiming
 point and cardinal marks, oxide-red brackets, and transparent gaps. Its hotspot
-is the centre. Native X11 bitmap cursors keep it visible over the archive, input
-and buttons without adding animation or replacing normal mouse events.
+is the centre. On X11, a small shaped window draws it over the archive, input
+and buttons. X11 delivers mouse events to the widgets below the reticle.
 
 Ornament occupies the upper and lower friezes, the archive's edge and a substantial
 side effigy. The character breathes, blinks, shifts his gaze, leans towards the
