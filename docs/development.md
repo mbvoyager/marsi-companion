@@ -174,6 +174,12 @@ ordering; it does not emulate the Pi's graphics driver or a Wayland compositor.
 The mapping test clears the cursor in an earlier map handler and verifies that
 the idle callback restores the reticle over controls as well as the root. This
 is a finite event-driven update, without pointer polling or input interception.
+These widget checks do not verify the Pi driver's hardware cursor plane. For
+an active `modesetting` driver with working clicks but an invisible pointer,
+`deploy/xorg/99-marsi-software-cursor.conf` is an opt-in OS-level test. It adds
+only `SWcursor` through an OutputClass, without selecting a driver or device.
+It is deliberately separate from the standard installer. Confirmation requires
+the driver log and a physical boot test; ordinary CI cannot verify that GPU path.
 
 ## Next milestones
 

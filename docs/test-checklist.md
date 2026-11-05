@@ -56,6 +56,11 @@ cd ~/marsi-companion
 - [ ] After a full Pi boot, move the mouse over the archive, input field and
       buttons. The reticle should be visible without closing and manually
       restarting Marsi. Test the manual launch too if boot behaviour differs.
+- [ ] If the optional [software-cursor workaround](troubleshooting.md#invisible-pointer-with-working-mouse-clicks-modesetting-software-cursor)
+      was installed after checking the driver, verify that Xorg reports a
+      software cursor and the pointer is visible after boot. Check clicking,
+      text selection, F8 and a spoken reply too; configuration presence alone
+      does not establish a working hardware result.
 - [ ] Leave the Lite/X11 screen idle for at least 15 minutes with Marsi open.
       The display stays on. Check `DISPLAY=:0 xset q` from the same user's SSH
       session: screen-saver timeout is 0 and DPMS disabled or unavailable. When
