@@ -90,6 +90,30 @@ These steps follow [Ubuntu's OpenSSH guide](https://ubuntu.com/server/docs/how-t
 
 ## Pi: display and boot
 
+### Recover the display after the withdrawn cursor configuration
+
+An earlier version of this guide offered `99-marsi-software-cursor.conf`.
+On an affected Raspberry Pi OS Lite installation, Xorg exited with
+`no screens found` after that file was installed. The `Connection refused`
+message from `startx` followed the Xorg failure.
+
+If you installed that file, rename it at the Pi's text console or over SSH,
+then reboot. Xorg reads files ending in `.conf` from its configuration
+directory. [Xorg configuration manual](https://manpages.debian.org/trixie/xserver-xorg-core/xorg.conf.5.en.html#DESCRIPTION)
+
+```bash
+sudo mv -- /etc/X11/xorg.conf.d/99-marsi-software-cursor.conf \
+  /etc/X11/xorg.conf.d/99-marsi-software-cursor.conf.disabled && sudo reboot
+```
+
+If Xorg still exits, collect the end of its log before retrying the launch.
+
+```bash
+tail -n 40 ~/.local/share/xorg/Xorg.0.log
+```
+
+### Screen and pointer checks
+
 Outgoing messages appear immediately with an `ESTIMATE` bar. A bar waiting at
 95% means the response exceeded the estimate; it does not mean the request is
 almost complete. The estimate adapts within the current display session.
@@ -132,66 +156,6 @@ ps -ww -C Xorg,startx -o args=
 If `-nocursor` is absent, do not assume reinstalling the startup block is the
 fix. Preserve these observations and whether the reticle returns after a manual
 launch for further startup/graphics diagnosis.
-
-### Invisible pointer with working mouse clicks: modesetting software cursor
-
-If clicks work, `-nocursor` is absent, and no cursor-hiding program is running,
-check the active Xorg graphics driver **while the affected session is still
-open**:
-
-```bash
-grep -Ei 'modesetting|fbdev|fbturbo|cursor|\(EE\)' "$HOME/.local/share/xorg/Xorg.0.log" /var/log/Xorg.0.log 2>/dev/null | tail -n 60
-```
-
-Loading a driver module alone does not prove that it was selected: Xorg may load
-`modesetting` and `fbdev` while probing, then unload one. Confirm that the active
-driver is `modesetting` before using this option. If the output is empty or only
-shows probe candidates, keep it for diagnosis instead of installing a new driver.
-
-The [modesetting driver](https://manpages.debian.org/trixie/xserver-xorg-core/modesetting.4.en.html)
-supports `SWcursor`: X11 draws the same mouse pointer in software. This is a
-reversible workaround to test a failed hardware-cursor path; it is not proof
-that a particular GPU or firmware bug caused the missing pointer. Cursor shape
-and ordinary mouse events still come from the app. This adds no Python polling
-loop. Actual pointer movement and audio need checking on the Pi.
-
-After confirming the driver, install the optional configuration **on the Pi**:
-
-```bash
-cd ~/marsi-companion
-git pull --ff-only
-sudo install -D -m 0644 deploy/xorg/99-marsi-software-cursor.conf /etc/X11/xorg.conf.d/99-marsi-software-cursor.conf
-sudo reboot
-```
-
-This setting applies to the Pi's X11 graphical session. It is not installed by
-the ordinary setup or autostart installer. The small
-[OutputClass](https://manpages.debian.org/trixie/xserver-xorg-core/xorg.conf.5.en.html#OUTPUTCLASS_SECTION)
-fragment adds only the cursor option to automatically detected outputs. It
-contains no `Driver`, `BusID`, resolution or framebuffer-path override.
-
-After boot, check the reticle before restarting Marsi manually. Over SSH, check
-whether Xorg accepted the option:
-
-```bash
-grep -Ei 'Marsi software cursor|SWcursor|software cursor|sw cursor|hardware cursor' "$HOME/.local/share/xorg/Xorg.0.log" /var/log/Xorg.0.log 2>/dev/null
-```
-
-The strongest confirmation is a driver message saying it is using a software
-cursor, together with a visibly working pointer. Merely finding the configuration
-file on disk is not that confirmation. An unused-option warning or a driver
-still reporting a hardware cursor means this test has not taken effect.
-
-To undo only this optional setting, use SSH or the local console:
-
-```bash
-sudo mv /etc/X11/xorg.conf.d/99-marsi-software-cursor.conf /etc/X11/xorg.conf.d/99-marsi-software-cursor.conf.disabled
-sudo reboot
-```
-
-No Ubuntu server update is needed. If the pointer still fails with a confirmed
-software cursor, preserve the new driver output and boot behaviour for the next
-diagnostic step.
 
 ### Display and startup commands
 

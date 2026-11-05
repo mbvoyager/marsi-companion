@@ -119,9 +119,6 @@ unchanged. Windows/macOS development uses a standard visible crosshair.
 At startup, screen power settings are prepared before the interface, and the
 reticle is reapplied after the window becomes visible. If it is missing only
 after automatic boot, see [startup cursor diagnosis](troubleshooting.md#pi-display-and-boot).
-If mouse clicks work but the pointer remains invisible, that guide also covers
-an optional, reversible `modesetting` software-cursor test after checking the
-actual graphics driver. It is not applied by the normal setup.
 
 On an existing desktop, open a terminal in the project directory and run:
 
