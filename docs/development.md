@@ -167,6 +167,14 @@ No estimate is represented as real inference progress. The X11 smoke test uses
 real `xset` under Xvfb to verify zero timeout and exact restoration. Physical
 monitor idle behaviour still needs the hardware acceptance check.
 
+The Pi entry-point test simulates screen preparation clearing the cursor, then
+checks the final reticle on the root, archive, entry and buttons. Screen power
+preparation must finish before constructing the display. This protects startup
+ordering; it does not emulate the Pi's graphics driver or a Wayland compositor.
+The mapping test clears the cursor in an earlier map handler and verifies that
+the idle callback restores the reticle over controls as well as the root. This
+is a finite event-driven update, without pointer polling or input interception.
+
 ## Next milestones
 
 1. Measure Qwen cold/warm latency and peak RAM on the i5; adjust model and thread

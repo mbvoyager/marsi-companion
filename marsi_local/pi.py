@@ -30,8 +30,10 @@ def main():
     root = tk.Tk()
     screen = ScreenAwake()
     try:
-        display = Display(root, Client.from_env(), windowed=args.windowed)
+        # Prepare the X11 display before mapping Marsi or installing the
+        # reticle. Boot-time power/mode changes must precede the final cursor.
         screen_warning = screen.start(root.tk.call("tk", "windowingsystem"))
+        display = Display(root, Client.from_env(), windowed=args.windowed)
         if screen_warning:
             display.show_text(screen_warning)
         # Startup checks routes only: PortAudio's hardware enumeration can open

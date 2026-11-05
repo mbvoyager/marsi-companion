@@ -53,6 +53,9 @@ cd ~/marsi-companion
 - [ ] Type `art`, `sermon`, `help` and `exit`. Commands perform their local
       action; `Tell me about art` remains a normal Qwen conversation.
 - [ ] Escape changes fullscreen to a window; Ctrl+Q closes Marsi. Reopen him.
+- [ ] After a full Pi boot, move the mouse over the archive, input field and
+      buttons. The reticle should be visible without closing and manually
+      restarting Marsi. Test the manual launch too if boot behaviour differs.
 - [ ] Leave the Lite/X11 screen idle for at least 15 minutes with Marsi open.
       The display stays on. Check `DISPLAY=:0 xset q` from the same user's SSH
       session: screen-saver timeout is 0 and DPMS disabled or unavailable. When

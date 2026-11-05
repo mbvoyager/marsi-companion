@@ -30,4 +30,12 @@ def install_reticle(root):
             apply(child)
 
     apply(root)
+
+    def mapped(event):
+        if event.widget is root:
+            # At boot the window manager and display may still be mapping the
+            # fullscreen window. Reassert the final cursor once mapping settles.
+            root.after_idle(lambda: apply(root))
+
+    root.bind("<Map>", mapped, add="+")
     return root.cget("cursor")

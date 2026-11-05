@@ -107,6 +107,34 @@ startup option. After pulling the current Pi code, run
 updates the managed profile block; it does not change audio settings or OS
 autologin. See the [pointer update steps](quickstart.md#3-start-the-display-manually).
 
+If the pointer is missing only after boot but works after a manual launch, update
+the Pi code and reboot. Marsi now prepares screen power settings before opening
+the fullscreen interface and installing its reticle, then reasserts that reticle
+after the window is mapped. This avoids setting the cursor only before display
+preparation and initial mapping have finished; the physical Pi still needs a
+cold-boot check. An older `-nocursor` startup entry must still be migrated
+with the installer above.
+
+For diagnosis, run these **while the automatically started, affected display is
+still open**, then record the exact manual start command that restores it:
+
+```bash
+ps -eo comm= | sort -u | grep -Ei 'xorg|xwayland|xinit|startx|labwc|wayfire|weston|openbox|unclutter'
+```
+
+This includes Wayland compositors and Xwayland. An empty result from a check
+limited to `Xorg`/`X` does not establish which graphical session is running.
+If `Xorg` is listed, inspect its arguments while the affected session is open:
+
+```bash
+ps -ww -C Xorg,startx -o args=
+```
+
+If `-nocursor` is absent, do not assume reinstalling the startup block is the
+fix. Preserve these observations and whether the reticle returns after a manual
+launch for further startup/graphics diagnosis. Do not post raw personal paths or
+logs to the public issue tracker.
+
 | Command | What it tells you or does |
 | --- | --- |
 | `pgrep -af 'marsi_local.pi'` | Is the display process running? |

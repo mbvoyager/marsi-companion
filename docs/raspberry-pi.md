@@ -116,6 +116,9 @@ installation hides the pointer, [refresh the Lite startup block and reboot](quic
 to remove the old `-nocursor` option. The pointer uses the window system, with
 no extra animation or mouse polling; typing, text selection and clicks are
 unchanged. Windows/macOS development uses a standard visible crosshair.
+At startup, screen power settings are prepared before the interface, and the
+reticle is reapplied after the window becomes visible. If it is missing only
+after automatic boot, see [startup cursor diagnosis](troubleshooting.md#pi-display-and-boot).
 
 On an existing desktop, open a terminal in the project directory and run:
 

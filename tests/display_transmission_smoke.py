@@ -11,6 +11,7 @@ from unittest.mock import Mock, patch
 
 from marsi_local.client import ClientError
 from marsi_local.display import Display
+from marsi_local.pi import main as pi_main
 
 
 class DisplayTransmissionTests(unittest.TestCase):
@@ -152,6 +153,81 @@ class DisplayTransmissionTests(unittest.TestCase):
             self.pump_until(lambda: not self.display.polling)
         self.client.telemetry.assert_called_once_with({})
         self.client.journal.assert_not_called()
+
+
+class DisplayStartupTests(unittest.TestCase):
+    def test_reticle_is_reasserted_when_the_fullscreen_window_becomes_mapped(self):
+        with tempfile.TemporaryDirectory() as folder, \
+                patch.dict(os.environ, {"MARSI_PI_STATE_DIR": folder, "MARSI_RITUALS": "false"}):
+            root = tk.Tk()
+            root.withdraw()
+            app = None
+            mapped = []
+            def simulate_map_reset(event):
+                if event.widget is root:
+                    mapped.append(True)
+                    for widget in (root, app.input, app.reply, app.canvas, app.send, app.talk):
+                        widget.configure(cursor="none")
+            # A preceding mapping handler models the cursor being cleared
+            # while the graphical session maps the initial fullscreen window.
+            root.bind("<Map>", simulate_map_reset, add="+")
+            app = Display(root, SimpleNamespace(session="synthetic-map"), windowed=True)
+            app.polling = True
+            root.geometry("800x480-20000+0")
+            try:
+                root.deiconify()
+                root.update()
+                self.assertTrue(mapped)
+                for widget in (root, app.input, app.reply, app.canvas, app.send, app.talk):
+                    self.assertEqual(widget.cget("cursor"), app.pointer_cursor)
+                # The event binding coexists with existing root bindings.
+                self.assertTrue(root.bind("<Configure>"))
+            finally:
+                for callback in root.tk.call("after", "info"):
+                    root.after_cancel(callback)
+                app.close()
+
+    def test_reticle_is_installed_after_screen_preparation_can_reset_the_pointer(self):
+        # Model a display wake-up that clears its cursor. This is a startup
+        # regression test, not a claim to emulate a particular Pi GPU driver.
+        with tempfile.TemporaryDirectory() as folder, \
+                patch.dict(os.environ, {"MARSI_PI_STATE_DIR": folder, "MARSI_RITUALS": "false"}):
+            root = tk.Tk()
+            root.withdraw()
+            screen = Mock()
+            def wake(backend):
+                root.configure(cursor="none")
+                return None
+            screen.start.side_effect = wake
+            cursors = []
+            def create(window, client, **kwargs):
+                app = Display(window, client, **kwargs)
+                app.polling = True
+                root.geometry("800x480-20000+0")
+                root.deiconify()
+                def inspect():
+                    for widget in (root, app.input, app.reply, app.canvas, app.send, app.talk):
+                        cursors.append((str(widget.cget("cursor")), str(app.pointer_cursor)))
+                    for callback in root.tk.call("after", "info"):
+                        root.after_cancel(callback)
+                    app.close()
+                root.after(30, inspect)
+                return app
+            with patch("sys.argv", ["marsi_local.pi", "--windowed"]), \
+                    patch("marsi_local.pi.load_env"), \
+                    patch("tkinter.Tk", return_value=root), \
+                    patch("marsi_local.pi.ScreenAwake", return_value=screen), \
+                    patch("marsi_local.pi.Client.from_env", return_value=SimpleNamespace(session="synthetic-startup")), \
+                    patch("marsi_local.pi.Display", side_effect=create), \
+                    patch("marsi_local.pi.inspect_audio", return_value=SimpleNamespace(issues=[])), \
+                    patch("marsi_local.pi.signal.signal"):
+                pi_main()
+            self.assertEqual(len(cursors), 6)
+            for actual, expected in cursors:
+                self.assertNotEqual(actual, "none")
+                self.assertEqual(actual, expected)
+            screen.start.assert_called_once()
+            screen.close.assert_called_once()
 
 
 if __name__ == "__main__":
