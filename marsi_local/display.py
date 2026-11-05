@@ -12,6 +12,7 @@ import time
 
 from .ambient import Ambient, quiet_hour
 from .client import ClientError, HELP, command
+from .climate_view import ClimateView
 from .liturgy import BLACK, GREEN, RED, without_emoji
 from .electoo import BONE, BRASS, Electoo
 from .telemetry import Telemetry, reading
@@ -59,6 +60,7 @@ class Display:
             self.last_spoken = 0
         self.hotkey_held = False
         self.hotkey_release = None
+        self.tab = "chat"
         self.ambient = Ambient(
             minimum=float(os.getenv("MARSI_RITUAL_MIN_SECONDS", "600")),
             maximum=float(os.getenv("MARSI_RITUAL_MAX_SECONDS", "1200")),
@@ -94,6 +96,14 @@ class Display:
         self.link_badge = tk.Label(header, textvariable=self.link_status, bg=BLACK, fg=BRASS,
                                    font=(self.mono, 8), padx=8)
         self.link_badge.grid(row=0, column=1, sticky="e")
+        tabs = tk.Frame(header, bg=BLACK)
+        tabs.grid(row=1, column=0, columnspan=2, sticky="ew", padx=7, pady=(0, 3))
+        self.tab_buttons = {}
+        for key, label in (("chat", "[ CHAT ]"), ("climate", "[ KLIMA ]")):
+            tab = self.button(tabs, label, lambda key=key: self.select_tab(key))
+            tab.configure(fg=GREEN if key == self.tab else BONE)
+            tab.pack(side="left", padx=(0, 3))
+            self.tab_buttons[key] = tab
         body = tk.Frame(root, bg=BLACK)
         body.grid(row=2, column=0, sticky="nsew", padx=7)
         body.columnconfigure(0, weight=1)
@@ -177,20 +187,42 @@ class Display:
                               ("FORGET", self.forget), ("HELP", lambda: self.show_text(HELP))):
             self.button(options, label, action).pack(side="left", padx=2)
         root.bind("<Configure>", lambda event: self.resize() if event.widget is root else None)
-        self.side = side
+        self.archive, self.side, self.controls = archive, side, controls
+        self.climate = ClimateView(body, client, self.events, self.mono, self.button)
         self.show_text("ARCHIVUM MARTIS // MACHINE-FLOW APERTURE\n"
                        "Mars reliquary -> near-side Terra\n"
                        "Bring me an observation, little keeper.\nType help for the local command cant.")
         self.resize()
         self.pointer_cursor = install_reticle(root, drawn=drawn_cursor)
         self.input.focus_set()
-        root.after(50, self.tick)
+        self.tick_job = root.after(50, self.tick)
 
     def button(self, parent, text, action):
         return self.tk.Button(parent, text=text, command=action, bg=BLACK, fg=RED,
                               activebackground=RED, activeforeground=GREEN, disabledforeground=RED,
                               relief="flat", highlightbackground=RED, highlightthickness=1,
                               borderwidth=0, font=(self.mono, 9), padx=4, pady=2)
+
+    def select_tab(self, tab):
+        if tab == self.tab:
+            return
+        self.tab = tab
+        self.last_interaction = time.monotonic()
+        for key, button in self.tab_buttons.items():
+            button.configure(fg=GREEN if key == tab else BONE)
+        if tab == "climate":
+            self.archive.grid_remove()
+            self.side.grid_remove()
+            self.controls.grid_remove()
+            self.climate.frame.grid(row=0, column=0, columnspan=2, sticky="nsew")
+            self.climate.start()
+            self.tab_buttons["climate"].focus_set()
+        else:
+            self.climate.frame.grid_remove()
+            self.archive.grid()
+            self.side.grid()
+            self.controls.grid()
+            self.input.focus_set()
 
     def resize(self):
         compact = self.root.winfo_width() < 640 or self.root.winfo_height() < 400
@@ -512,12 +544,14 @@ class Display:
     def toggle_record(self):
         from .pi import record
         if self.recording:
+            self.select_tab("chat")
             self.stop.set()
             self.recording = False
             self.talk.configure(text="TALK [F8]", state="disabled")
             self.mode = "thinking"
             self.status.set("[AUDITORY] Recording sealed; consulting the cogitator...")
         elif not self.busy and self.can_contact():
+            self.select_tab("chat")
             self.last_interaction = time.monotonic()
             self.recording = True
             self.stop = threading.Event()
@@ -606,6 +640,8 @@ class Display:
                 self.readings["pi"] = result
             elif kind == "polled":
                 self.finish_poll(*result)
+            elif kind == "climate":
+                self.climate.receive(*result, time.monotonic())
             elif kind == "speaking":
                 self.mode = "speaking"
             elif kind == "spoken":
@@ -647,11 +683,15 @@ class Display:
             speak = self.ritual_speech and self.speak.get()
             self.start_task(lambda: self.client.ritual(speak), speak)
         self.draw(now)
-        self.root.after(200, self.tick)
+        self.tick_job = self.root.after(200, self.tick)
 
     def draw(self, now):
-        for electoo in self.electoos:
+        electoos = self.electoos if self.tab == "chat" else self.electoos[:2]
+        for electoo in electoos:
             electoo.draw(now, self.mode)
+        if self.tab == "climate":
+            self.climate.tick(now)
+            return
         phrases = {"listening": "[ RECEIVING / VOX ]\nEVERY WORD, A DATUM",
                    "thinking": "[ CORRELATING DATA ]\nSEEK THE HIDDEN PATTERN",
                    "speaking": "[ TRANSMITTING / VOX ]\nKNOWLEDGE RETURNS TO TERRA"}
@@ -667,8 +707,14 @@ class Display:
         self.meters.set("\n".join(meters))
 
     def close(self):
+        if self.closed:
+            return
         self.closed = True
+        self.root.after_cancel(self.tick_job)
+        if self.hotkey_release is not None:
+            self.root.after_cancel(self.hotkey_release)
         self.stop.set()
+        self.climate.stop.set()
         if self.playback is not None:
             try:
                 self.playback.terminate()

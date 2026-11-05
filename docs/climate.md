@@ -319,6 +319,23 @@ PY
 The history point count reflects the actual time window and can be zero after
 the sensor has been quiet.
 
+## Open the Klima tab on the Pi
+
+Update the Pi checkout to the version with the climate display and restart the
+graphical session. A Pi with Marsi autostart enabled can reboot into the new
+display. See the [Pi setup guide](raspberry-pi.md) for the usual start commands.
+
+Choose **KLIMA** above the journal. **Jetzt** shows the temperature, relative
+humidity and time of the latest measurement. **AUSSEN** identifies an outdoor
+sensor and **SIGNAL ALT** marks a stale climate reading. In **3 h**, **24 h** and
+**7 Tage**, the temperature and humidity use separate plots with a shared time
+axis. Sensor names, colors and line patterns identify the traces. Wide gaps in
+the archive appear as breaks in a trace. A lone sample appears as a dot.
+
+The tab opens a live stream using the Pi's existing Marsi URL and token. New
+measurements update the view as they arrive. **LINK PAUSE** indicates the feed
+will retry. **CHAT** returns to the journal and **F8** opens it for voice input.
+
 ## Simulate more sensors
 
 Add entries to the `sensors` object in your local `marsi.json`, such as these two.

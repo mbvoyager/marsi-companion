@@ -5,6 +5,7 @@ import argparse
 import json
 import os
 import urllib.error
+from urllib.parse import urlencode
 import urllib.request
 
 from .config import load_env, validate_url
@@ -38,7 +39,7 @@ class Client:
         else:
             body = None
         request = urllib.request.Request(self.url + path, data=body, headers=headers, method=method)
-        quick_request = path == "/health" or path.startswith(("/v1/telemetry", "/v1/journal"))
+        quick_request = path == "/health" or path.startswith(("/v1/telemetry", "/v1/journal", "/v1/climate/"))
         timeout = min(self.timeout, 5) if quick_request else self.timeout
         try:
             with self.http.open(request, timeout=timeout) as response:
@@ -90,6 +91,37 @@ class Client:
 
     def telemetry(self, readings):
         return self.request("/v1/telemetry", {"readings": readings})
+
+    def climate_history(self, period):
+        return self.request("/v1/climate/history?" + urlencode({"range": period}), method="GET")
+
+    def climate_events(self, stop):
+        request = urllib.request.Request(self.url + "/v1/climate/events", headers={
+            "Authorization": "Bearer " + self.token, "Accept": "text/event-stream",
+        })
+        try:
+            # The server sends a heartbeat every 15 seconds during quiet periods.
+            with self.http.open(request, timeout=25) as response:
+                if response.headers.get_content_type() != "text/event-stream":
+                    raise ClientError("Invalid climate live feed.")
+                data = None
+                while not stop.is_set():
+                    line = response.readline(262_145)
+                    if not line or len(line) > 262_144:
+                        raise ClientError("Climate live feed interrupted.")
+                    if line.startswith(b"data: "):
+                        data = line[6:]
+                    elif line in (b"\n", b"\r\n") and data is not None:
+                        snapshot = json.loads(data)
+                        if not isinstance(snapshot, dict) or not isinstance(snapshot.get("sensors"), list):
+                            raise ClientError("Invalid climate snapshot.")
+                        data = None
+                        yield snapshot
+        except urllib.error.HTTPError as error:
+            error.close()
+            raise ClientError("Climate live feed unavailable.", status=error.code) from error
+        except (OSError, ValueError) as error:
+            raise ClientError("Climate live feed interrupted.") from error
 
     def speak_entry(self, entry_id):
         return self.request("/v1/speak", {"session_id": self.session, "entry_id": entry_id, "want_audio": True})

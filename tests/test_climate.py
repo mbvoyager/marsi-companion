@@ -1,13 +1,12 @@
 import io
 import json
-from contextlib import redirect_stdout
+from contextlib import closing, redirect_stdout
 from pathlib import Path
 import tempfile
 import threading
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
-from urllib.request import Request
 
 from marsi_local.climate import ClimateConfig, HOUR_MS, STALE_AFTER_MS, _check_archive
 from marsi_local.client import Client, ClientError
@@ -54,15 +53,6 @@ class ClimateTests(unittest.TestCase):
         self.addCleanup(thread.join, 2)
         self.addCleanup(self.server.shutdown)
         return Client(f"http://127.0.0.1:{self.server.server_port}", token=self.app.config.token, timeout=2)
-
-    def next_snapshot(self, stream):
-        for _ in range(12):
-            if stream.readline() == b"event: climate\n":
-                data = stream.readline()
-                self.assertTrue(data.startswith(b"data: "))
-                self.assertEqual(stream.readline(), b"\n")
-                return json.loads(data.removeprefix(b"data: "))
-        self.fail("Climate snapshot did not arrive")
 
     def test_subscribes_again_after_reconnect(self):
         self.client.connect_async.assert_called_once_with("127.0.0.1", 1883, keepalive=30)
@@ -136,8 +126,7 @@ class ClimateTests(unittest.TestCase):
         self.measure("sim-exterior", now - 8 * 24 * HOUR_MS, temperature=-20)
         api = self.http_api()
         with patch("marsi_local.climate.time.time_ns", return_value=now * 1_000_000):
-            raw, day, week = (api.request(f"/v1/climate/history?range={period}", method="GET")
-                              for period in ("3h", "24h", "7d"))
+            raw, day, week = (api.climate_history(period) for period in ("3h", "24h", "7d"))
         self.assertEqual([result["bucket_ms"] for result in (raw, day, week)], [0, 300_000, 1_800_000])
         self.assertEqual(raw["sensors"][0]["series"]["temperature"], [
             [boundary - 1_200_000, 10], [boundary - 290_000, 20], [boundary - 120_000, 24],
@@ -156,17 +145,15 @@ class ClimateTests(unittest.TestCase):
     def test_stream_pushes_new_reading_and_later_freshness_change(self):
         now = 1_800_000_000_000
         api = self.http_api()
-        request = Request(api.url + "/v1/climate/events", headers={"Authorization": "Bearer " + api.token})
         with patch("marsi_local.server.CLIMATE_HEARTBEAT_SECONDS", 0.1), \
                 patch("marsi_local.climate.time.time_ns", return_value=now * 1_000_000) as clock, \
-                api.http.open(request, timeout=2) as stream:
-            self.assertEqual(stream.headers.get_content_type(), "text/event-stream")
-            self.assertEqual(self.next_snapshot(stream)["sensors"][0]["status"], "waiting")
+                closing(api.climate_events(threading.Event())) as stream:
+            self.assertEqual(next(stream)["sensors"][0]["status"], "waiting")
             self.measure("test-forge", now, temperature=22)
-            current = self.next_snapshot(stream)["sensors"][0]
+            current = next(stream)["sensors"][0]
             self.assertEqual(current["status"], "fresh")
             self.assertEqual(current["readings"]["temperature"]["value"], 22)
             self.measure("test-forge", now, temperature=22)
             self.assertEqual(self.server.climate.archive.revision, 1)
             clock.return_value = (now + STALE_AFTER_MS) * 1_000_000
-            self.assertEqual(self.next_snapshot(stream)["sensors"][0]["status"], "stale")
+            self.assertEqual(next(stream)["sensors"][0]["status"], "stale")

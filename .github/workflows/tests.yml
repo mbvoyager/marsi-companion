@@ -23,7 +23,7 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y python3-tk xvfb alsa-utils x11-xserver-utils libxtst6
       - run: python -m unittest tests.audio_playback_smoke -v
       - run: xvfb-run -a python -m tests.pi_display_smoke
-      - run: xvfb-run -a python -m unittest tests.display_transmission_smoke tests.screen_smoke -v
+      - run: xvfb-run -a python -m unittest tests.display_transmission_smoke tests.screen_smoke tests.climate_display_smoke -v
       - run: xvfb-run -a -s "-screen 0 800x600x24 -nocursor" python -m unittest tests.drawn_pointer_smoke -v
   speech-decoder:
     runs-on: ubuntu-latest
