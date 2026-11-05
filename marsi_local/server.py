@@ -20,6 +20,7 @@ from .core import Companion, ServiceError, clean_text, ritual, session_name
 from .speech import MAX_AUDIO_BYTES, Speech, VOICE_CHECK_TEXT
 
 LOG = logging.getLogger("marsi.local")
+CLIMATE_HEARTBEAT_SECONDS = 15
 
 
 class Server(ThreadingHTTPServer):
@@ -30,6 +31,7 @@ class Server(ThreadingHTTPServer):
         self.companion = companion
         self.stopping = threading.Event()
         self.climate = None
+        self.climate_streams = threading.BoundedSemaphore(8)
         super().__init__(address, Handler)
 
     def observance_loop(self):
@@ -60,6 +62,8 @@ class Server(ThreadingHTTPServer):
     def server_close(self):
         self.stopping.set()
         if self.climate is not None:
+            with self.climate.archive.updates:
+                self.climate.archive.updates.notify_all()
             self.climate.close()
         if hasattr(self, "scheduler"):
             self.scheduler.join(timeout=2)
@@ -67,7 +71,6 @@ class Server(ThreadingHTTPServer):
 
 
 class Handler(BaseHTTPRequestHandler):
-    # Short-lived connections keep the implementation and resource use predictable.
     server_version = "Marsi/0.1"
 
     def setup(self):
@@ -92,6 +95,41 @@ class Handler(BaseHTTPRequestHandler):
         provided = self.headers.get("Authorization", "")
         if token and not hmac.compare_digest(provided.encode(), ("Bearer " + token).encode()):
             raise ServiceError("A valid Marsi token is required.", 401)
+
+    def stream_climate(self, archive):
+        slots = self.server.climate_streams
+        if not slots.acquire(blocking=False):
+            raise ServiceError("Too many climate streams. Try again shortly.", 503)
+        stopping = self.server.stopping
+        revision, previous = -1, None
+        self.close_connection = True
+        try:
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Connection", "close")
+            self.end_headers()
+            while not stopping.is_set():
+                with archive.updates:
+                    changed = archive.updates.wait_for(lambda: archive.revision != revision or stopping.is_set(),
+                                                       timeout=CLIMATE_HEARTBEAT_SECONDS)
+                    revision = archive.revision
+                if stopping.is_set():
+                    break
+                snapshot = archive.current()
+                # Freshness can change during a heartbeat even without a new report.
+                if changed or snapshot["sensors"] != previous:
+                    payload = json.dumps(snapshot, ensure_ascii=False).encode("utf-8")
+                    self.wfile.write(b"event: climate\ndata: " + payload + b"\n\n")
+                    previous = snapshot["sensors"]
+                else:
+                    self.wfile.write(b": keepalive\n\n")
+        except OSError:
+            pass
+        except sqlite3.Error as error:
+            LOG.error("Climate stream could not read the archive (%s)", type(error).__name__)
+        finally:
+            slots.release()
 
     def read_body(self, limit=MAX_AUDIO_BYTES) -> bytes:
         if self.headers.get("Transfer-Encoding"):
@@ -128,6 +166,16 @@ class Handler(BaseHTTPRequestHandler):
             if method == "GET" and path == "/health":
                 return self.respond(200, {"status": "ok", "mode": "demo" if app.config.demo else "local-llm"})
             self.authenticated()
+            if method == "GET" and path in ("/v1/climate/now", "/v1/climate/history", "/v1/climate/events"):
+                if self.server.climate is None:
+                    raise ServiceError("The climate archive is unavailable. Check the server configuration.", 503)
+                archive = self.server.climate.archive
+                if path == "/v1/climate/events":
+                    return self.stream_climate(archive)
+                if path == "/v1/climate/history":
+                    query = parse_qs(urlsplit(self.path).query, keep_blank_values=True)
+                    return self.respond(200, archive.history(query.get("range", ["3h"])[0]))
+                return self.respond(200, archive.current())
             if method == "GET" and path == "/v1/journal":
                 query = parse_qs(urlsplit(self.path).query)
                 session = session_name(query.get("session_id", ["pi"])[0])

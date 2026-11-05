@@ -261,6 +261,64 @@ snapshots are skipped and repeated writes for the same sensor, metric and
 millisecond use one row. An update without `last_seen` uses the arrival time.
 The archive records reports that reach Marsi while its subscriber is running.
 
+## Read the archive over Marsi's API
+
+The climate routes use the existing Marsi server address and bearer token.
+Timestamps are Unix milliseconds in UTC. All routes are read-only.
+
+| GET route | Response |
+| --- | --- |
+| `/v1/climate/now` | One entry per configured sensor with its name, location, optional color and latest values with individual timestamps |
+| `/v1/climate/history?range=3h` | Individual temperature and humidity samples from the last three hours |
+| `/v1/climate/history?range=24h` | Temperature and humidity means in five-minute buckets |
+| `/v1/climate/history?range=7d` | Temperature and humidity means in thirty-minute buckets |
+| `/v1/climate/events` | Server-sent `climate` events with the current snapshot |
+
+The `now` response includes `last_measurement_ms` for the most recent
+temperature or humidity reading and `last_report_ms` for the newest archived
+report of any kind. A sensor is `waiting` before its first temperature or
+humidity reading, `fresh` for two hours from the latest measurement and then
+`stale`. Battery and link quality have their own timestamps.
+
+Each history series is an array of `[time_ms, value]` pairs. The server averages
+each sensor and metric separately inside UTC-aligned buckets. `bucket_ms` is
+zero for raw samples. Buckets without measurements are absent.
+
+The event stream sends an initial snapshot, followed by updates after readings
+are committed or freshness changes. It sends a keepalive comment during idle
+periods. Use the `Authorization` header on the stream request as on the JSON
+routes. [Server-sent events format](https://html.spec.whatwg.org/multipage/server-sent-events.html)
+
+From the Ubuntu checkout, use this check after starting the updated server.
+It reads the bearer token from the local environment and prints only the sensor
+name and state, history counts, and the first event line.
+
+```bash
+.venv-server/bin/python - <<'PY'
+from urllib.request import Request
+
+from marsi_local.client import Client
+from marsi_local.config import ServerConfig, load_env
+
+load_env(".env.server")
+api = Client("http://127.0.0.1:8765", token=ServerConfig.from_env().token, timeout=5)
+current = api.request("/v1/climate/now", method="GET")
+for sensor in current["sensors"]:
+    print(sensor["name"], sensor["status"], ", ".join(sensor["readings"]))
+for period in ("3h", "24h", "7d"):
+    history = api.request(f"/v1/climate/history?range={period}", method="GET")
+    count = sum(len(points) for sensor in history["sensors"] for points in sensor["series"].values())
+    print(period, "points", count, "bucket_ms", history["bucket_ms"])
+request = Request(api.url + "/v1/climate/events", headers={"Authorization": "Bearer " + api.token})
+with api.http.open(request, timeout=5) as stream:
+    print("Live", stream.readline().decode().strip())
+PY
+```
+
+`Live event: climate` confirms the stream opened and sent its initial snapshot.
+The history point count reflects the actual time window and can be zero after
+the sensor has been quiet.
+
 ## Simulate more sensors
 
 Add entries to the `sensors` object in your local `marsi.json`, such as these two.

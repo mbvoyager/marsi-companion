@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import argparse
 from contextlib import closing
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 import json
 import logging
@@ -12,6 +12,7 @@ from pathlib import Path
 import random
 import re
 import sqlite3
+import threading
 import time
 
 from .config import ServerConfig, load_env
@@ -25,6 +26,16 @@ METRIC_RANGES = {
     "linkquality": (0, 255),
 }
 MAX_TIMESTAMP_MS = 253_402_300_799_999
+MINUTE_MS = 60_000
+HOUR_MS = 60 * MINUTE_MS
+STALE_AFTER_MS = 2 * HOUR_MS
+CLIMATE_METRICS = ("temperature", "humidity")
+# The period and bucket width in milliseconds. A zero width preserves the samples.
+HISTORY_WINDOWS = {
+    "3h": (3 * HOUR_MS, 0),
+    "24h": (24 * HOUR_MS, 5 * MINUTE_MS),
+    "7d": (7 * 24 * HOUR_MS, 30 * MINUTE_MS),
+}
 
 
 @dataclass(frozen=True)
@@ -106,9 +117,24 @@ def _observed_ms(last_seen) -> int:
     raise ValueError("Invalid last_seen timestamp")
 
 
+def _latest_readings(db, sensor_id: str, through_ms: int = MAX_TIMESTAMP_MS) -> dict:
+    readings = {}
+    for metric in METRIC_RANGES:
+        row = db.execute("""
+            SELECT value, observed_ms FROM climate_readings
+            WHERE sensor_id=? AND metric=? AND observed_ms<=?
+            ORDER BY observed_ms DESC LIMIT 1
+        """, (sensor_id, metric, through_ms)).fetchone()
+        if row is not None:
+            readings[metric] = {"value": row[0], "observed_ms": row[1]}
+    return readings
+
+
 class ClimateArchive:
-    def __init__(self, memory: Memory):
-        self.memory = memory
+    def __init__(self, memory: Memory, config: ClimateConfig):
+        self.memory, self.config = memory, config
+        self.updates = threading.Condition()
+        self.revision = 0
         with memory.connect() as db:
             db.execute("""
                 CREATE TABLE IF NOT EXISTS climate_readings (
@@ -138,11 +164,65 @@ class ClimateArchive:
                 rows.append((sensor_id, metric, observed_ms, float(value)))
         if rows:
             with self.memory.connect() as db:
-                db.executemany("""
+                changed = db.executemany("""
                     INSERT INTO climate_readings (sensor_id, metric, observed_ms, value)
                     VALUES (?, ?, ?, ?)
                     ON CONFLICT (sensor_id, metric, observed_ms) DO UPDATE SET value=excluded.value
-                """, rows)
+                    WHERE climate_readings.value <> excluded.value
+                """, rows).rowcount
+            if changed:
+                # Publish only after the transaction commits so readers can see the change.
+                with self.updates:
+                    self.revision += 1
+                    self.updates.notify_all()
+
+    def current(self) -> dict:
+        now = time.time_ns() // 1_000_000
+        sensors = []
+        with self.memory.connect() as db:
+            db.execute("BEGIN")
+            for sensor_id, sensor in self.config.sensors.items():
+                readings = _latest_readings(db, sensor_id, now)
+                measured = max((readings[metric]["observed_ms"] for metric in CLIMATE_METRICS
+                                if metric in readings), default=None)
+                if measured is None:
+                    status = "waiting"
+                else:
+                    status = "stale" if now - measured >= STALE_AFTER_MS else "fresh"
+                sensors.append({
+                    "id": sensor_id, **asdict(sensor), "status": status,
+                    "last_measurement_ms": measured,
+                    "last_report_ms": max((reading["observed_ms"] for reading in readings.values()), default=None),
+                    "readings": readings,
+                })
+        return {"generated_ms": now, "stale_after_ms": STALE_AFTER_MS, "sensors": sensors}
+
+    def history(self, period: str) -> dict:
+        if period not in HISTORY_WINDOWS:
+            raise ValueError("Climate range must be 3h, 24h or 7d")
+        duration, bucket = HISTORY_WINDOWS[period]
+        end = time.time_ns() // 1_000_000
+        start = end - duration
+        sensors = []
+        window = "FROM climate_readings WHERE sensor_id=? AND metric IN (?, ?) AND observed_ms BETWEEN ? AND ?"
+        with self.memory.connect() as db:
+            db.execute("BEGIN")
+            for sensor_id, sensor in self.config.sensors.items():
+                parameters = (sensor_id, *CLIMATE_METRICS, start, end)
+                if bucket:
+                    rows = db.execute(
+                        f"SELECT metric, (observed_ms / ?) * ? AS at, AVG(value) {window} "
+                        "GROUP BY metric, at ORDER BY metric, at",
+                        (bucket, bucket, *parameters),
+                    )
+                else:
+                    rows = db.execute(f"SELECT metric, observed_ms, value {window} ORDER BY metric, observed_ms",
+                                      parameters)
+                series = {metric: [] for metric in CLIMATE_METRICS}
+                for metric, at, value in rows:
+                    series[metric].append([max(start, at), value])
+                sensors.append({"id": sensor_id, **asdict(sensor), "series": series})
+        return {"range": period, "from_ms": start, "to_ms": end, "bucket_ms": bucket, "sensors": sensors}
 
 
 def _mqtt_client(config: ClimateConfig):
@@ -164,7 +244,7 @@ class ClimateSubscriber:
         self.config = config
         self.topics = {config.topic(sensor_id): sensor_id for sensor_id in config.sensors}
         self.client = _mqtt_client(config)
-        self.archive = ClimateArchive(memory)
+        self.archive = ClimateArchive(memory, config)
         self.client.on_connect = self._connected
         self.client.on_connect_fail = self._connect_failed
         self.client.on_disconnect = self._disconnected
@@ -216,17 +296,14 @@ def _check_archive(database: Path, config: ClimateConfig) -> None:
     with closing(sqlite3.connect(uri, uri=True, timeout=10)) as db:
         for sensor_id, sensor in config.sensors.items():
             print(sensor.name)
+            readings = _latest_readings(db, sensor_id)
             for metric in METRIC_RANGES:
-                row = db.execute("""
-                    SELECT value, observed_ms FROM climate_readings
-                    WHERE sensor_id=? AND metric=? ORDER BY observed_ms DESC LIMIT 1
-                """, (sensor_id, metric)).fetchone()
-                if row is None:
+                reading = readings.get(metric)
+                if reading is None:
                     print(f"  {metric}: waiting for first reading")
                 else:
-                    value, observed_ms = row
-                    stamp = datetime.fromtimestamp(observed_ms / 1000, timezone.utc)
-                    print(f"  {metric}: {value:g}  [{stamp.isoformat(timespec='milliseconds')}]")
+                    stamp = datetime.fromtimestamp(reading["observed_ms"] / 1000, timezone.utc)
+                    print(f"  {metric}: {reading['value']:g}  [{stamp.isoformat(timespec='milliseconds')}]")
 
 
 def _simulate(config: ClimateConfig, interval: float | None) -> None:
