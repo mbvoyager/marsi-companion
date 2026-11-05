@@ -25,8 +25,8 @@ class DrawnPointerTests(unittest.TestCase):
         clicks = []
         button = tk.Button(self.root, text="A synthetic seal", command=lambda: clicks.append(True))
         button.pack(pady=8)
-        entry = tk.Entry(self.root)
-        entry.insert(0, "A synthetic transmission")
+        entry = tk.Entry(self.root, width=24)
+        entry.insert(0, "Reticle test")
         entry.pack()
         self.assertEqual(install_reticle(self.root, drawn=True), "none")
         reticle = self.root.drawn_reticle
@@ -79,18 +79,23 @@ class DrawnPointerTests(unittest.TestCase):
         background = pixel(*corner)
         move(x, y)
         self.assertTrue(reticle.visible)
-        self.assertEqual(pixel(x, y), int(GREEN.lstrip("#"), 16), "The reticle must be painted on screen")
+        green_pixel = int(GREEN.lstrip("#"), 16)
+        self.assertEqual(pixel(x, y), green_pixel, "The reticle must be painted on screen")
         self.assertEqual(pixel(*corner), background, "The reticle's transparent gaps must stay transparent")
         press(True)
         press(False)
         self.assertEqual(clicks, [True], "The drawn reticle must let a real click reach the button")
 
-        start_x, start_y, _, height = entry.bbox(1)
-        end_x, _, _, _ = entry.bbox(9)
+        # Entry.bbox is Tkinter's grid bbox, not the entry's glyph bounds.
+        start_x, start_y, _, height = entry.tk.call(str(entry), "bbox", 1)
+        end_x, _, _, _ = entry.tk.call(str(entry), "bbox", 9)
+        self.assertGreater(end_x, start_x)
         entry_y = entry.winfo_rooty() + start_y + height // 2
         move(entry.winfo_rootx() + start_x, entry_y)
         press(True)
-        move(entry.winfo_rootx() + end_x, entry_y)
+        drag_x = entry.winfo_rootx() + end_x
+        move(drag_x, entry_y)
+        self.assertEqual(pixel(drag_x, entry_y), green_pixel, "The reticle must follow a drag")
         press(False)
         self.assertTrue(entry.selection_present(), "Dragging through the reticle must select text")
         move(self.root.winfo_screenwidth() - 2, self.root.winfo_screenheight() - 2)
