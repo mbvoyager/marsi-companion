@@ -103,12 +103,14 @@
         </div>
         <p id="climate-link" class="seal" role="status">[ CONNECTING ]</p>
       </div>
-      <nav class="controls range" aria-label="Time range">
+      <div class="controls range" role="group" aria-label="Climate controls">
         <button type="button" data-period="now" aria-pressed="true">Now</button>
         <button type="button" data-period="3h" aria-pressed="false">3 h</button>
         <button type="button" data-period="24h" aria-pressed="false">24 h</button>
         <button type="button" data-period="7d" aria-pressed="false">7 days</button>
-      </nav>
+        <button type="button" id="climate-refresh">Refresh archive</button>
+      </div>
+      <p id="climate-refresh-status" class="message" role="status" hidden></p>
       <p id="climate-message" class="message" role="status"></p>
       <div id="cards" class="sensor-grid"></div>
       <div id="history" hidden>

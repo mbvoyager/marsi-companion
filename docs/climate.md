@@ -336,6 +336,11 @@ The tab opens a live stream using the Pi's existing Marsi URL and token. New
 measurements update the view as they arrive. **LINK PAUSE** indicates the feed
 will retry. **CHAT** returns to the journal and **F8** opens it for voice input.
 
+**Refresh archive** on the Pi and in the browser reloads the latest stored
+readings with their original timestamps. The Aqara WSDCGQ11LM sends its own
+reports, so after a restart Marsi waits for the next one.
+[Aqara WSDCGQ11LM in Zigbee2MQTT](https://www.zigbee2mqtt.io/devices/WSDCGQ11LM.html)
+
 ## Open Marsi in a browser on the LAN
 
 Update the Ubuntu checkout to the version with the web interface and restart

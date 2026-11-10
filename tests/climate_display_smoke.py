@@ -110,6 +110,26 @@ class ClimateDisplaySmoke(unittest.TestCase):
                 self.assertGreaterEqual(len(self.panel.canvas.find_withtag("climate-trace")), 8)
                 self.check_text_fits()
 
+    def test_refresh_archive_checks_latest_values_and_preserves_live_updates(self):
+        self.display.tab_buttons["climate"].invoke()
+        self.pump_until(lambda: "21.5 °C" in self.labels())
+        self.root.geometry("480x320-20000+0")
+        archived = {**sample_snapshot(22.6), "generated_ms": NOW + 1}
+        self.client.climate_now = Mock(return_value=archived)
+
+        self.panel.refresh_button.invoke()
+        self.pump_until(lambda: "22.6 °C" in self.labels())
+        self.client.climate_now.assert_called_once_with()
+        self.assertIn("STALE READING", self.labels())
+        self.assertEqual(self.panel.status.cget("text"), "[ LIVE ]")
+        self.assertIn("Archive checked.", self.panel.refresh_status.cget("text"))
+
+        self.client.snapshots.put({**sample_snapshot(23.4), "generated_ms": NOW + 2})
+        self.pump_until(lambda: "23.4 °C" in self.labels())
+        self.panel.refresh_button.invoke()
+        self.pump_until(lambda: self.panel.refresh_button.cget("state") == "normal")
+        self.assertEqual(self.panel.snapshot["generated_ms"], NOW + 2)
+
     def test_live_updates_and_f8_keep_the_chat_draft(self):
         self.display.show_text("An archived line.")
         self.display.input.insert(0, "Unsent draft")

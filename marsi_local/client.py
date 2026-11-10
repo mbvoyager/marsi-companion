@@ -92,6 +92,9 @@ class Client:
     def telemetry(self, readings):
         return self.request("/v1/telemetry", {"readings": readings})
 
+    def climate_now(self):
+        return self.request("/v1/climate/now", method="GET")
+
     def climate_history(self, period):
         return self.request("/v1/climate/history?" + urlencode({"range": period}), method="GET")
 

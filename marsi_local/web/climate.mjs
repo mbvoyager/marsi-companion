@@ -51,6 +51,8 @@ export class ClimateView {
     this.legend = document.querySelector("#legend");
     this.message = document.querySelector("#climate-message");
     this.link = document.querySelector("#climate-link");
+    this.refreshButton = document.querySelector("#climate-refresh");
+    this.refreshStatus = document.querySelector("#climate-refresh-status");
     this.buttons = [...document.querySelectorAll("[data-period]")];
     this.canvases = Object.fromEntries(METRICS.map(metric => [metric, document.querySelector(`#${metric}-chart`)]));
     this.readouts = Object.fromEntries(METRICS.map(metric => [metric, document.querySelector(`#${metric}-readout`)]));
@@ -58,6 +60,7 @@ export class ClimateView {
     this.period = "now";
     this.inspect = {};
     for (const button of this.buttons) button.addEventListener("click", () => this.select(button.dataset.period));
+    this.refreshButton.addEventListener("click", () => this.refresh());
     for (const [metric, canvas] of Object.entries(this.canvases)) {
       canvas.addEventListener("pointerdown", event => this.inspectAt(metric, event));
       canvas.addEventListener("pointermove", event => {
@@ -72,6 +75,8 @@ export class ClimateView {
   open() {
     if (this.feed) return;
     this.feed = new AbortController();
+    this.refreshButton.disabled = false;
+    this.refreshStatus.hidden = true;
     this.setLink("[ CONNECTING ]", "waiting");
     this.render();
     this.follow(this.feed.signal);
@@ -100,6 +105,31 @@ export class ClimateView {
   setLink(label, state) {
     this.link.textContent = label;
     this.link.dataset.state = state;
+  }
+
+  async refresh() {
+    const signal = this.feed?.signal;
+    if (!signal || this.refreshButton.disabled) return;
+    this.refreshButton.disabled = true;
+    this.refreshStatus.hidden = false;
+    this.refreshStatus.textContent = "Checking the archive ...";
+    try {
+      const snapshot = await this.request("/v1/climate/now", {signal});
+      if (signal.aborted) return;
+      if (!Array.isArray(snapshot?.sensors) || !Number.isFinite(snapshot.generated_ms)) {
+        throw new Error("Invalid climate snapshot");
+      }
+      if (!this.snapshot || snapshot.generated_ms >= this.snapshot.generated_ms) {
+        this.snapshot = snapshot;
+        this.render();
+      }
+      this.refreshStatus.textContent = "Archive checked. Sensor reports arrive automatically.";
+      this.scheduleHistory(0);
+    } catch (error) {
+      if (!signal.aborted) this.refreshStatus.textContent = "Could not check the climate archive.";
+    } finally {
+      if (!signal.aborted) this.refreshButton.disabled = false;
+    }
   }
 
   async follow(signal) {

@@ -44,6 +44,8 @@ class ClimateView:
             tab = button(bar, label, lambda key=key: self.select(key))
             tab.pack(side="left", padx=1)
             self.tabs[key] = tab
+        self.refresh_button = button(bar, "Refresh archive", self.refresh)
+        self.refresh_button.pack(side="left", padx=4)
         self.status = tk.Label(bar, text="[ CONNECTING ]", bg=BLACK, fg=BRASS, font=(mono, -11), padx=4)
         self.status.pack(side="right")
         self.pages = tk.Frame(bar, bg=BLACK)
@@ -57,6 +59,7 @@ class ClimateView:
         self.canvas = tk.Canvas(self.frame, bg=BLACK, highlightthickness=0, width=1, height=1)
         self.canvas.grid(row=1, column=0, sticky="nsew")
         self.canvas.bind("<Configure>", self.invalidate)
+        self.refresh_status = tk.Label(self.frame, bg=BLACK, fg=BRASS, font=(mono, -11))
         self.cog = Electoo(self.canvas, mono)
         self.title_font = font.Font(root=parent, family=mono, size=-13, weight="bold")
         self.label_font = font.Font(root=parent, family=mono, size=-11)
@@ -80,6 +83,21 @@ class ClimateView:
                 self.stop.wait(delay)
                 delay = min(8, delay * 2)
 
+    def refresh(self):
+        self.refresh_button.configure(state="disabled")
+        self.refresh_status.configure(text="Checking the archive ...")
+        self.refresh_status.grid(row=2, column=0, sticky="w", padx=5)
+        threading.Thread(target=self.fetch_current, daemon=True).start()
+
+    def fetch_current(self):
+        try:
+            result = self.client.climate_now()
+            if not isinstance(result.get("sensors"), list) or type(result.get("generated_ms")) is not int:
+                result = None
+        except ClientError:
+            result = None
+        self.events.put(("climate", ("refresh", result)))
+
     def fetch_history(self, period):
         try:
             result = self.client.climate_history(period)
@@ -95,6 +113,15 @@ class ClimateView:
             self.feed_status = None
             self.status.configure(text="[ LIVE ]", fg=GREEN)
             self.history_at = 0
+        elif kind == "refresh":
+            self.refresh_button.configure(state="normal")
+            if data is None:
+                self.refresh_status.configure(text="Could not check the climate archive.")
+            else:
+                self.refresh_status.configure(text="Archive checked. Sensor reports arrive automatically.")
+                if self.snapshot is None or data["generated_ms"] >= self.snapshot.get("generated_ms", 0):
+                    self.snapshot = data
+                self.history_at = 0
         elif kind == "offline":
             self.feed_status = data
             self.status.configure(text="[ LINK PAUSE ]", fg=BRASS)

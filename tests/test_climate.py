@@ -105,7 +105,7 @@ class ClimateTests(unittest.TestCase):
                 Client(api.url, timeout=2).request(f"/v1/climate/{path}", method="GET")
             self.assertEqual(denied.exception.status, 401)
         with patch("marsi_local.climate.time.time_ns", return_value=now * 1_000_000):
-            result = api.request("/v1/climate/now", method="GET")
+            result = api.climate_now()
         forge, exterior = result["sensors"]
         self.assertEqual(forge["status"], "fresh")
         self.assertEqual(forge["readings"]["temperature"], {"value": 22.5, "observed_ms": now - 1000})
