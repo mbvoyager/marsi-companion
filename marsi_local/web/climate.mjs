@@ -277,6 +277,7 @@ export class ClimateView {
       cog.setAttribute("aria-hidden", "true");
       title.prepend(cog);
       head.append(title, text("span", sensor.location === "outdoor" ? "[ OUTDOOR ]" : "[ INDOOR ]", "badge"));
+      if (sensor.room) head.append(text("span", sensor.room, "message"));
       const value = metric => sensor.readings[metric] ? number.format(sensor.readings[metric].value) : "--";
       const details = text("div", "", "card-footer");
       const battery = sensor.readings.battery?.value;

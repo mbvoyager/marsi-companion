@@ -210,9 +210,11 @@ nano ~/marsi-climate/marsi.json
 
 Replace `REPLACE_WITH_DEVICE_TOPIC` with the exact suffix you saw in step 4.
 Sensor IDs use letters, numbers, underscores or hyphens. Set `name` and
-`location` (`indoor` or `outdoor`). `color` is an optional `#RRGGBB` value.
-Additional sensors are entries in the same `sensors` object. Keep their keys
-stable so their history follows them when you change a display name.
+`location` (`indoor` or `outdoor`). `room` and a `#RRGGBB` `color` are optional.
+On the first start with this version, Marsi imports the `sensors` object into
+SQLite using the existing IDs. This keeps their readings attached. Subsequent
+changes to names, rooms, colours or devices go through **Administration** in the
+browser. Keep `marsi.json` for the MQTT settings and password-file path.
 
 Write the password for the Marsi MQTT client. The file is relative to `marsi.json`
 and only needs to be readable by the Ubuntu user who runs `marsi-server`.
@@ -300,7 +302,7 @@ same file as the query.
 
 The climate routes use the existing Marsi server address and bearer token.
 Timestamps are stored and sent as Unix milliseconds in UTC. The Pi and browser
-format them in their respective local time zones. All climate routes are read-only.
+format them in their respective local time zones. These climate routes are read-only.
 
 | GET route | Response |
 | --- | --- |
@@ -504,9 +506,83 @@ permission. Press **FINISH** to send the recording, or let the recording
 finish after 15 seconds. The browser sends a complete WAV in memory. Marsi
 stores the recognised conversation in the same journal as typed turns.
 
+## Manage sensors and readings
+
+Use the trusted [local HTTPS address](#enable-the-browser-microphone-with-local-https)
+for administration. The regular token grants climate reading access. A separate
+admin token authorizes management on HTTPS. The Pi uses the regular token and
+shows climate readings and status.
+
+On Ubuntu, generate a random admin token locally and open `.env.server`.
+
+```bash
+cd ~/marsi-companion
+python3 -c 'import secrets; print(secrets.token_urlsafe(32))'
+nano .env.server
+```
+
+Add `MARSI_ADMIN_TOKEN=` followed by the generated value. Keep it private and
+distinct from `MARSI_TOKEN`. Restart Marsi so the new settings and one-time
+sensor import take effect.
+
+```bash
+chmod 600 .env.server
+systemctl --user restart marsi-server
+systemctl --user is-active marsi-server
+.venv-server/bin/python -m marsi_local.climate --check
+```
+
+Expect `active` and the existing sensor names and values. Reload the HTTPS page,
+open the archive with the regular token, then select **ADMINISTRATION** and
+enter the admin token. Leaving the administration tab, reloading, or using
+**LOCK ADMIN** clears the admin token from the page.
+
+### Pair a sensor and update its details
+
+1. Check that both services are **ONLINE**. Select **Open for 120 s**. This opens
+   the Zigbee coordinator for two minutes. **Close pairing** ends the window early.
+2. Put the sensor in pairing mode near the coordinator. For the Aqara WSDCGQ11LM,
+   hold its button until the blue LED blinks and release it. After Zigbee2MQTT
+   completes the interview, the device appears as **Discovered** in the sensor list.
+3. Select that entry, choose its name, room, location and chart colour, and use
+   **Adopt sensor**. It appears in **CLIMATE**. Its first report populates the
+   readings. A quick tap on the Aqara can send a report immediately.
+4. Select a registered sensor to edit its display details. The stable sensor ID
+   and MQTT topic keep its history tied to the device.
+
+**Hide in Marsi** removes the sensor from the climate views and keeps recording
+its reports. Use **Show sensor** to restore it. **Remove from Zigbee** also asks
+Zigbee2MQTT to remove the device. Both actions have a preview and confirmation.
+The readings stay in the archive. A sleeping sensor may need to be woken before
+the coordinator can remove it. If the bridge fails to confirm, check the device
+list and its connection before trying again.
+[Zigbee2MQTT pairing and removal](https://www.zigbee2mqtt.io/guide/usage/mqtt_topics_and_messages.html)
+
+### Delete selected readings
+
+Under **Stored readings**, choose a sensor, enter a time range, or use both.
+Times in the form are local to the browser. The start is included and the end
+is excluded. Use **Show readings** and a row's **Preview deletion** to remove
+only that metric at that timestamp. For a bulk deletion, use **Preview deletion**
+under the filter. Review the scope and count before confirming. If reports have
+changed the selection, request a new preview.
+
+Before a deletion or sensor removal, Marsi creates a verified SQLite backup in
+`climate-backups/` next to the database. For the default database this is
+`~/marsi-companion/data/climate-backups/`. A backup failure cancels the action.
+Successful actions record the UTC timestamp, scope, number of readings deleted
+and backup filename in `climate_admin_log`. The backup contains the full Marsi
+database, including the conversation journal. Keep it private. To restore it,
+stop `marsi-server`, preserve a copy of the current database, replace the
+configured database with the selected backup, then start the service again.
+Restoring the file also restores the journal and sensor settings from that time.
+[SQLite online backup](https://docs.python.org/3/library/sqlite3.html#sqlite3.Connection.backup)
+
 ## Simulate more sensors
 
-Add entries to the `sensors` object in your local `marsi.json`, such as these two.
+Existing `sim-` sensors are imported along with the real sensors. For a fresh
+development database, add simulated entries to the `sensors` seed in your local
+`marsi.json` before starting the server for the first time.
 
 ```json
 {
@@ -515,10 +591,10 @@ Add entries to the `sensors` object in your local `marsi.json`, such as these tw
 }
 ```
 
-Restart `marsi-server` to pick up the new topic subscriptions. Once the log
-confirms the subscriptions, run the simulator from the Marsi checkout. It
-sends one batch to every configured `sim-` sensor through the same broker and
-storage path. For a continuous test, add `--interval 15` and use Ctrl+C to stop.
+Once the service log confirms the subscriptions, run the simulator from the
+Marsi checkout. It sends one batch to every registered `sim-` sensor through
+the same broker and storage path. For a continuous test, add `--interval 15`
+and use Ctrl+C to stop.
 
 ```bash
 .venv-server/bin/python -m marsi_local.climate --simulate

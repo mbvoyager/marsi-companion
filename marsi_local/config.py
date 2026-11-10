@@ -49,6 +49,12 @@ class ServerConfig:
     schedule_session: str = "pi"
     morning_hour: int = 7
     climate_config: Path | None = None
+    admin_token: str = ""
+
+    def __post_init__(self):
+        if self.admin_token and (len(self.token) < 32 or self.admin_token == self.token
+                                 or not re.fullmatch(r"[A-Za-z0-9_-]{32,128}", self.admin_token)):
+            raise ValueError("MARSI_ADMIN_TOKEN needs 32..128 URL-safe characters and a distinct MARSI_TOKEN")
 
     @classmethod
     def from_env(cls, demo: bool = False) -> ServerConfig:
@@ -71,6 +77,7 @@ class ServerConfig:
             schedule_session=os.getenv("MARSI_COMPANION_SESSION", "pi"),
             morning_hour=int(os.getenv("MARSI_MORNING_HOUR", "7")),
             climate_config=Path(climate).expanduser() if climate else None,
+            admin_token=os.getenv("MARSI_ADMIN_TOKEN", ""),
         )
         if not 1 <= config.threads <= 64 or not 1 <= config.timeout <= 600:
             raise ValueError("CPU threads must be 1..64 and timeout must be 1..600 seconds")

@@ -31,6 +31,7 @@
     <nav id="navigation" class="controls" aria-label="Marsi views" hidden>
       <button id="tab-chat" type="button" aria-pressed="true">[ CHAT ]</button>
       <button id="tab-climate" type="button" aria-pressed="false">[ CLIMATE ]</button>
+      <button id="tab-admin" type="button" aria-pressed="false" hidden>[ ADMINISTRATION ]</button>
       <button id="lock" type="button" class="end">LOCK</button>
     </nav>
   </header>
@@ -128,6 +129,75 @@
           <p id="humidity-readout" class="readout" aria-live="polite"></p>
         </section>
       </div>
+    </section>
+    <section id="climate-admin" class="panel sensorium" aria-labelledby="admin-title" hidden>
+      <div class="sensorium-header">
+        <div><p class="kicker">[ SENSORIUM // KEEPER ACCESS ]</p><h2 id="admin-title">Administration</h2></div>
+        <button id="admin-lock" type="button" hidden>LOCK ADMIN</button>
+      </div>
+      <form id="admin-login" class="admin-block controls">
+        <label>Climate admin token <input id="admin-token" type="password" autocomplete="off" spellcheck="false" required maxlength="128"></label>
+        <button type="submit">Unlock administration</button>
+      </form>
+      <p id="admin-notice" class="message" role="status"></p>
+      <div id="admin-controls" hidden>
+        <section class="admin-block" aria-labelledby="pairing-title">
+          <h3 id="pairing-title">Zigbee pairing</h3>
+          <p id="admin-pair-status" class="message"></p>
+          <div class="controls">
+            <button id="admin-pair-open" type="button">Open for 120 s</button>
+            <button id="admin-pair-close" type="button">Close pairing</button>
+            <button id="admin-refresh" type="button">Refresh devices</button>
+          </div>
+          <p class="message">Open pairing, activate the sensor's pairing button, then select the discovered device below.</p>
+        </section>
+        <section class="admin-block" aria-labelledby="sensors-title">
+          <h3 id="sensors-title">Sensors</h3>
+          <label>Registered or discovered device <select id="admin-sensor"></select></label>
+          <form id="admin-editor" class="admin-fields" hidden>
+            <label>Name <input id="admin-name" required maxlength="80"></label>
+            <label>Room <input id="admin-room" maxlength="80"></label>
+            <label>Location <select id="admin-location"><option value="indoor">Indoor</option><option value="outdoor">Outdoor</option></select></label>
+            <label class="controls"><input id="admin-use-color" type="checkbox"> Chart colour <input id="admin-color" type="color" value="#9fbf97"></label>
+            <div class="controls admin-actions">
+              <button id="admin-save" type="submit">Save sensor</button>
+              <button id="admin-show" type="button" hidden>Show sensor</button>
+              <button id="admin-hide" type="button" hidden>Hide in Marsi</button>
+              <button id="admin-unpair" type="button" hidden>Remove from Zigbee</button>
+            </div>
+          </form>
+        </section>
+        <section class="admin-block" aria-labelledby="readings-title">
+          <h3 id="readings-title">Stored readings</h3>
+          <form id="admin-readings" class="admin-fields">
+            <label>Sensor <select id="admin-filter-sensor"></select></label>
+            <label>From, local time <input id="admin-from" type="datetime-local"></label>
+            <label>Until, local time <input id="admin-to" type="datetime-local"></label>
+            <div class="controls admin-actions">
+              <button type="submit">Show readings</button>
+              <button id="admin-delete" type="button">Preview deletion</button>
+            </div>
+          </form>
+          <div id="admin-reading-results" hidden>
+            <div class="admin-table"><table>
+              <thead><tr><th scope="col">Time</th><th scope="col">Sensor</th><th scope="col">Metric</th><th scope="col">Value</th><th scope="col">Action</th></tr></thead>
+              <tbody id="admin-reading-rows"></tbody>
+            </table></div>
+            <div class="controls">
+              <button id="admin-previous" type="button">Previous</button>
+              <button id="admin-next" type="button">Next</button>
+            </div>
+          </div>
+        </section>
+      </div>
+      <dialog id="admin-dialog" aria-labelledby="admin-dialog-title">
+        <h3 id="admin-dialog-title">Confirm archive action</h3>
+        <p id="admin-preview"></p>
+        <div class="controls">
+          <button id="admin-cancel" type="button" autofocus>Cancel</button>
+          <button id="admin-confirm" type="button">Confirm</button>
+        </div>
+      </dialog>
     </section>
   </main>
   <footer class="kicker">// THE COG TURNS · THE LITTLE ONE KEEPS YOU COMPANY //</footer>

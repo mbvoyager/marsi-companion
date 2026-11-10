@@ -177,6 +177,21 @@ class ClimateTests(unittest.TestCase):
             reopened.journal()
             self.assertEqual(reopened.climate_history("3h"), before)
 
+    def test_sensor_seed_is_imported_only_once_with_existing_ids(self):
+        self.measure("test-forge", 1_767_225_600_051, temperature=21)
+        self.settings.write_text(json.dumps({"sensors": "unused after migration"}), encoding="utf-8")
+        settings = ClimateConfig.for_archive(self.settings, self.app.config.database)
+        self.assertEqual(settings.sensors, {})
+        reopened = Server(("127.0.0.1", 0), Companion(self.app.config))
+        self.addCleanup(reopened.server_close)
+        with patch("marsi_local.climate._mqtt_client", return_value=Mock()):
+            reopened.start_climate()
+        registered = reopened.climate.archive.registered()
+        self.assertEqual(list(registered), ["test-forge", "sim-exterior"])
+        self.assertEqual(registered["test-forge"].details.name, "Forge")
+        with patch("marsi_local.climate.time.time_ns", return_value=1_767_225_601_000_000_000):
+            self.assertEqual(reopened.climate.current()["sensors"][0]["readings"]["temperature"]["value"], 21)
+
     def test_stream_pushes_new_reading_and_later_freshness_change(self):
         now = 1_800_000_000_000
         api = self.http_api()

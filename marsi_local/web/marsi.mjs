@@ -1,4 +1,5 @@
 import {ClimateView} from "./climate.mjs";
+import {ClimateAdminView} from "./climate-admin.mjs";
 import {canRecord, openRecorder, replyBlob} from "./vox.mjs";
 
 const $ = id => document.getElementById(id);
@@ -52,6 +53,7 @@ async function request(path, {method = "GET", body, signal, headers, stream = fa
 }
 
 const climate = new ClimateView(request, rememberView);
+const admin = globalThis.location?.protocol === "https:" ? new ClimateAdminView(request) : null;
 
 function rememberView() {
   try { sessionStorage.setItem(viewKey, JSON.stringify({tab: state.tab, period: climate.period})); } catch {}
@@ -78,14 +80,17 @@ function link(text, kind) {
 }
 
 function selectView(tab) {
-  if (!state.unlocked) return;
+  if (!state.unlocked || (tab === "admin" && !admin)) return;
+  if (state.tab === "admin" && tab !== "admin") admin.close();
   state.tab = tab;
   $("chat").hidden = tab !== "chat";
   $("climate").hidden = tab !== "climate";
-  for (const view of ["chat", "climate"]) $("tab-" + view).setAttribute("aria-pressed", view === tab);
+  $("climate-admin").hidden = tab !== "admin";
+  for (const view of ["chat", "climate", "admin"]) $("tab-" + view).setAttribute("aria-pressed", view === tab);
   if (tab === "climate") climate.open();
   else climate.close();
-  rememberView();
+  if (tab === "admin") admin.open();
+  else rememberView();
 }
 
 function nowStamp(at) {
@@ -197,6 +202,7 @@ function lockArchive(message = "") {
   state.generation += 1;
   state.connection?.abort();
   climate.reset();
+  admin?.close();
   state.recorder?.cancel();
   state.recorder = null;
   state.unlocked = state.busy = state.opening = state.finishing = state.journalBusy = false;
@@ -209,7 +215,7 @@ function lockArchive(message = "") {
   $("message").value = $("token").value = "";
   $("gate").hidden = false;
   $("connect").disabled = false;
-  $("chat").hidden = $("climate").hidden = $("navigation").hidden = true;
+  $("chat").hidden = $("climate").hidden = $("climate-admin").hidden = $("navigation").hidden = true;
   link("[ ARCHIVE SEALED ]", "waiting");
   notice("gate-status", message, Boolean(message));
   try { sessionStorage.removeItem(sessionKey); } catch {}
@@ -237,6 +243,7 @@ async function openArchive(token, session) {
     $("token").value = "";
     $("gate").hidden = true;
     $("navigation").hidden = false;
+    $("tab-admin").hidden = !admin;
     $("chat").hidden = false;
     if (!page.entries.length) showWords("Bring me an observation, little keeper. Type help for the local command cant.");
     addEntries(page.entries, {scroll: true});
@@ -460,6 +467,7 @@ $("latest").addEventListener("click", () => { journal.scrollTop = journal.scroll
 $("talk").addEventListener("click", talk);
 $("tab-chat").addEventListener("click", () => { selectView("chat"); refreshTelemetry(); });
 $("tab-climate").addEventListener("click", () => selectView("climate"));
+$("tab-admin").addEventListener("click", () => selectView("admin"));
 $("lock").addEventListener("click", () => lockArchive());
 for (const button of document.querySelectorAll("[data-command]")) button.addEventListener("click", () => command(button.dataset.command));
 document.addEventListener("keydown", event => {

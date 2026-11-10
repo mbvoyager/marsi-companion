@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {test} from "node:test";
 import {setTimeout as sleep} from "node:timers/promises";
 import {ClimateView} from "../marsi_local/web/climate.mjs";
+import {ClimateAdminView} from "../marsi_local/web/climate-admin.mjs";
 
 class Element {
   attributes = {};
@@ -9,6 +10,8 @@ class Element {
   dataset = {};
   listeners = {};
   style = {setProperty() {}};
+  value = "";
+  open = false;
 
   addEventListener(name, listener) { this.listeners[name] = listener; }
   setAttribute(name, value) { this.attributes[name] = String(value); }
@@ -16,6 +19,10 @@ class Element {
   append(...children) { this.children.push(...children); }
   prepend(...children) { this.children.unshift(...children); }
   pause() {}
+  reset() {}
+  focus() {}
+  showModal() { this.open = true; }
+  close() { this.open = false; this.listeners.close?.(); }
 }
 
 function mountPage(storage = new Map()) {
@@ -97,6 +104,7 @@ test("login and page reload request the selected climate history after authentic
   assert.deepEqual(paths, []);
   submit();
   await until(() => node("gate").hidden === true);
+  assert.equal(node("tab-admin").hidden, true);
   node("tab-climate").listeners.click();
   periods["24h"].listeners.click();
   await until(() => node("legend").children.length === 2);
@@ -169,4 +177,38 @@ test("sensor cards show last report, battery warning and LQI separately from ser
   view.statusAvailable = false;
   view.render();
   assert.equal(node("cards").children[0].children[4].children[1].textContent, "SIGNAL UNKNOWN");
+});
+
+test("administration previews a selection before confirming and clears its token on lock", async t => {
+  const {node, storage} = mountPage();
+  const requests = [];
+  const view = new ClimateAdminView(async (path, {headers, body}) => {
+    requests.push({path, body});
+    assert.equal(headers["X-Marsi-Admin-Token"], "synthetic-admin-token");
+    if (path.endsWith("/status")) return {sensors: [], discoveries: [], services: {mqtt: "online", zigbee2mqtt: "online"}};
+    if (path.endsWith("/preview")) return {action: "delete", count: 2, scope: body.filters, preview_id: "test-preview"};
+    assert.ok(path.endsWith("/confirm"));
+    assert.deepEqual(body, {preview_id: "test-preview", confirm: true});
+    return {action: "delete", readings_deleted: 2, backup: "test.sqlite3"};
+  });
+  t.after(() => view.close());
+  node("admin-token").value = "synthetic-admin-token";
+  node("admin-login").listeners.submit({preventDefault() {}});
+  await until(() => node("admin-controls").hidden === false);
+  assert.equal(node("admin-token").value, "");
+  assert.equal(storage.size, 0);
+  node("admin-filter-sensor").value = "forge";
+  node("admin-delete").listeners.click();
+  await until(() => node("admin-dialog").open);
+  assert.match(node("admin-preview").textContent, /Delete 2 readings/);
+  node("admin-cancel").listeners.click();
+  assert.equal(requests.some(({path}) => path.endsWith("/confirm")), false);
+
+  node("admin-delete").listeners.click();
+  await until(() => node("admin-dialog").open);
+  node("admin-confirm").listeners.click();
+  await until(() => node("admin-notice").textContent.includes("test.sqlite3"));
+  node("admin-lock").listeners.click();
+  assert.equal(view.token, "");
+  assert.equal(node("admin-controls").hidden, true);
 });

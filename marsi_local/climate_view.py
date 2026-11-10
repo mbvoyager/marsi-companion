@@ -237,7 +237,8 @@ class ClimateView:
         c.create_line(x + w - 21, y + h, x + w, y + h, x + w, y + h - 14, fill=accent)
         self.cog.ring(x + 13, y + 12, 4, accent, teeth=8)
         location = "OUTDOOR" if sensor["location"] == "outdoor" else "INDOOR"
-        c.create_text(x + 24, y + 12, text=self.fit(sensor["name"], w - 94, self.title_font),
+        name = sensor["name"] + (f" / {sensor['room']}" if sensor.get("room") else "")
+        c.create_text(x + 24, y + 12, text=self.fit(name, w - 94, self.title_font),
                       anchor="w", fill=BONE, font=self.title_font)
         c.create_text(x + w - 9, y + 12, text=f"[{location}]", anchor="e", fill=BRASS, font=self.label_font)
         readings = sensor["readings"]

@@ -18,6 +18,7 @@ from urllib.parse import parse_qs, urlsplit
 from .config import ServerConfig, load_env, validate_bind
 from .audio_transfer import attach_audio
 from .climate import ClimateConfig, ClimateSubscriber
+from .climate_admin import ClimateAdmin
 from .core import Companion, ServiceError, clean_text, ritual, session_name
 from .speech import MAX_AUDIO_BYTES, Speech, VOICE_CHECK_TEXT
 
@@ -29,6 +30,7 @@ WEB_ASSETS = {
     "/web/marsi.css": ("marsi.css", "text/css; charset=utf-8"),
     "/web/marsi.mjs": ("marsi.mjs", "text/javascript; charset=utf-8"),
     "/web/climate.mjs": ("climate.mjs", "text/javascript; charset=utf-8"),
+    "/web/climate-admin.mjs": ("climate-admin.mjs", "text/javascript; charset=utf-8"),
     "/web/vox.mjs": ("vox.mjs", "text/javascript; charset=utf-8"),
     "/web/recorder.js": ("recorder.js", "text/javascript; charset=utf-8"),
 }
@@ -43,6 +45,7 @@ class Server(ThreadingHTTPServer):
         self.shared, self.tls = shared, tls
         self.stopping = shared.stopping if shared else threading.Event()
         self.climate = shared.climate if shared else None
+        self.climate_admin = shared.climate_admin if shared else None
         self.climate_streams = shared.climate_streams if shared else threading.BoundedSemaphore(8)
         super().__init__(address, Handler)
 
@@ -74,12 +77,16 @@ class Server(ThreadingHTTPServer):
         if path is None:
             return
         try:
-            climate = ClimateSubscriber(ClimateConfig.load(path), self.companion.memory)
+            settings = ClimateConfig.for_archive(path, self.companion.config.database)
+            management = bool(self.companion.config.admin_token)
+            climate = ClimateSubscriber(settings, self.companion.memory, management=management)
+            admin = ClimateAdmin(climate) if management else None
             climate.start()
         except (OSError, RuntimeError, ValueError, sqlite3.Error) as error:
             LOG.error("Climate logging unavailable: %s", error)
         else:
             self.climate = climate
+            self.climate_admin = admin
 
     def server_close(self):
         if self.shared is None:
@@ -118,6 +125,26 @@ class Handler(BaseHTTPRequestHandler):
         provided = self.headers.get("Authorization", "")
         if token and not hmac.compare_digest(provided.encode(), ("Bearer " + token).encode()):
             raise ServiceError("A valid Marsi token is required.", 401)
+
+    def climate_management(self, method, path):
+        if self.server.tls is None:
+            raise ServiceError("Climate administration requires HTTPS.", 403)
+        token = self.server.companion.config.admin_token
+        if not token:
+            raise ServiceError("Climate administration is disabled on Ubuntu.", 403)
+        provided = self.headers.get("X-Marsi-Admin-Token", "")
+        if not hmac.compare_digest(provided.encode(), token.encode()):
+            raise ServiceError("A valid climate admin token is required.", 403)
+        admin = self.server.climate_admin
+        if admin is None:
+            raise ServiceError("The climate archive is unavailable. Check the server configuration.", 503)
+        if method == "GET" and path == "status":
+            return self.respond(200, admin.status())
+        operations = {"pairing": admin.pairing, "sensors": admin.save_sensor, "readings": admin.readings,
+                      "preview": admin.preview, "confirm": admin.confirm}
+        if method != "POST" or path not in operations:
+            raise ServiceError("Unknown climate administration endpoint.", 404)
+        return self.respond(200, operations[path](self.read_json()))
 
     def web_asset(self, path):
         filename, mime = WEB_ASSETS[path]
@@ -208,6 +235,8 @@ class Handler(BaseHTTPRequestHandler):
             if method == "GET" and path in WEB_ASSETS:
                 return self.web_asset(path)
             self.authenticated()
+            if path.startswith("/v1/climate/admin/"):
+                return self.climate_management(method, path.removeprefix("/v1/climate/admin/"))
             if method == "GET" and path in ("/v1/climate/now", "/v1/climate/history", "/v1/climate/events"):
                 climate = self.server.climate
                 if climate is None:

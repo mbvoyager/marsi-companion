@@ -98,6 +98,26 @@ use `Content-Type: application/json`. The browser page, its static assets and
 | `POST /v1/memory` | `session_id`, `text` | Add explicit note |
 | `DELETE /v1/session` | `session_id` | Clear that session's journal, context, notes and schedule |
 
+Climate administration uses HTTPS and the regular bearer token plus
+`X-Marsi-Admin-Token`. The routes below all use the `/v1/climate/admin/` prefix.
+
+| Method / suffix | Input | Result |
+| --- | --- | --- |
+| `GET status` | None | Registered sensors, eligible discovered devices, service status and pairing deadline |
+| `POST pairing` | Boolean `open` | Open the coordinator for 120 seconds or close it after a Zigbee2MQTT acknowledgement |
+| `POST sensors` | `id` or `device_id`, `name`, `location`, optional `room`, `color`, `show` | Edit or adopt a device and return the updated registry |
+| `POST readings` | Optional `filters`, `offset` | Page of exact stored readings and offsets for adjacent pages |
+| `POST preview` | `action=hide` or `unpair` with `id`, or `action=delete` with `filters` | Scope, count and a five-minute preview ID |
+| `POST confirm` | `preview_id`, `confirm=true` | Apply the preview after validating it and creating a backup. Return the backup name and deletion count |
+
+Reading filters use `sensor_id`, inclusive `from_ms`, exclusive `to_ms`, or the
+exact key `sensor_id` + `metric` + `observed_ms`. A bulk deletion needs a sensor
+or a time bound. Times are Unix milliseconds in UTC. Preview IDs are single use.
+Deletion checks the same set of rows under a write lock, creates a backup from a
+separate SQLite connection, then deletes and logs the action in one transaction.
+The `climate_sensors` registry imports JSON once using the `climate-sensors-v1`
+migration marker. Display changes preserve the IDs in `climate_readings`.
+
 Chat text is capped at 2,000 characters. WAV uploads are capped at 2 MB and
 20 seconds, mono 16-bit PCM. One task at a time runs on the old CPU; simultaneous
 inference requests receive a retryable error. Telemetry/journal reads do not take
@@ -135,7 +155,10 @@ telemetry, persistent routine targets, missed mornings and daylight-saving chang
 They do not benchmark real models. The script bot has its own separate test suite.
 The climate tests archive two synthetic sensor reports, check their UTC timestamps
 in SQLite and read them after a fresh server instance starts. The browser tests
-exercise login, page reload and overlapping live updates without a physical sensor.
+exercise login, page reload, overlapping live updates and the preview dialog.
+The administration tests simulate the Zigbee2MQTT bridge and check pairing, stable
+IDs, role separation over a local HTTPS server, backups and audit records. OpenSSL
+generates the test certificate in a temporary directory.
 Language tests use the real offline detector with synthetic German/English text.
 They cover bounded rewrites, unchanged old archives, rejecting failed drafts
 before synthesis, missing-dependency errors and a diagnostic that fails for a
