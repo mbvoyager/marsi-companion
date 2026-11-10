@@ -44,7 +44,7 @@ function closest(points, at) {
 }
 
 export class ClimateView {
-  constructor(request) {
+  constructor(request, onPeriodChange) {
     this.request = request;
     this.cards = document.querySelector("#cards");
     this.historyPanel = document.querySelector("#history");
@@ -59,7 +59,12 @@ export class ClimateView {
     this.hiddenSensors = new Set();
     this.period = "now";
     this.inspect = {};
-    for (const button of this.buttons) button.addEventListener("click", () => this.select(button.dataset.period));
+    this.historyRequest = this.historyTimer = null;
+    this.historyPending = false;
+    for (const button of this.buttons) button.addEventListener("click", () => {
+      this.select(button.dataset.period);
+      onPeriodChange();
+    });
     this.refreshButton.addEventListener("click", () => this.refresh());
     for (const [metric, canvas] of Object.entries(this.canvases)) {
       canvas.addEventListener("pointerdown", event => this.inspectAt(metric, event));
@@ -80,15 +85,14 @@ export class ClimateView {
     this.setLink("[ CONNECTING ]", "waiting");
     this.render();
     this.follow(this.feed.signal);
-    this.scheduleHistory();
+    this.scheduleHistory(0);
     this.windowTimer = setInterval(() => this.scheduleHistory(), 60_000);
   }
 
   close() {
     this.feed?.abort();
     this.feed = null;
-    this.historyRequest?.abort();
-    clearTimeout(this.historyTimer);
+    this.cancelHistory();
     clearInterval(this.windowTimer);
   }
 
@@ -180,37 +184,62 @@ export class ClimateView {
   }
 
   select(period) {
-    this.period = period;
-    this.history = null;
-    this.inspect = {};
-    this.historyRequest?.abort();
-    clearTimeout(this.historyTimer);
+    if (!this.buttons.some(button => button.dataset.period === period)) period = "now";
+    if (this.period !== period) {
+      this.cancelHistory();
+      this.period = period;
+      this.history = null;
+      this.inspect = {};
+    }
     for (const button of this.buttons) button.setAttribute("aria-pressed", button.dataset.period === period);
     this.render();
     this.scheduleHistory(0);
   }
 
+  cancelHistory() {
+    this.historyRequest?.abort();
+    clearTimeout(this.historyTimer);
+    this.historyRequest = this.historyTimer = null;
+    this.historyPending = false;
+  }
+
   scheduleHistory(ms = 180) {
     if (!this.feed || this.period === "now") return;
+    // Let the current read finish. Coalesce reports into one follow-up read.
+    if (this.historyRequest) {
+      this.historyPending = true;
+      return;
+    }
+    if (this.historyTimer !== null && ms > 0) return;
     clearTimeout(this.historyTimer);
-    this.historyTimer = setTimeout(() => this.fetchHistory(), ms);
+    this.historyTimer = setTimeout(() => {
+      this.historyTimer = null;
+      this.fetchHistory();
+    }, ms);
   }
 
   async fetchHistory() {
-    this.historyRequest?.abort();
     const controller = new AbortController();
     this.historyRequest = controller;
     const period = this.period;
+    let retry;
     try {
       const history = await this.request(`/v1/climate/history?range=${period}`, {signal: controller.signal});
       if (controller.signal.aborted || period !== this.period) return;
       this.history = history;
       if (this.link.dataset.state === "live") this.message.textContent = "";
       this.render();
-    } catch (error) {
+    } catch {
       if (controller.signal.aborted) return;
       this.message.textContent = "Retrying climate history ...";
-      this.scheduleHistory(5000);
+      retry = 5000;
+    } finally {
+      if (this.historyRequest === controller) {
+        const pending = this.historyPending;
+        this.historyRequest = null;
+        this.historyPending = false;
+        if (retry || pending) this.scheduleHistory(retry);
+      }
     }
   }
 

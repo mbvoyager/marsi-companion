@@ -7,6 +7,7 @@ const voice = $("voice");
 const player = $("reply-audio");
 const mic = canRecord();
 const sessionKey = "marsi-web-session";
+const viewKey = "marsi-web-view";
 const HELP = "art | sermon | bless | history | /remember TEXT | /notes | /forget | exit\nF8 or TALK opens the vox. F8 or FINISH seals the recording.";
 const stampFormat = new Intl.DateTimeFormat("en-GB", {dateStyle: "short", timeStyle: "short"});
 const state = {generation: 0, journalEpoch: 0, unlocked: false, session: "pi", token: "", tab: "chat", entries: new Map()};
@@ -50,7 +51,15 @@ async function request(path, {method = "GET", body, signal, headers, stream = fa
   }
 }
 
-const climate = new ClimateView(request);
+const climate = new ClimateView(request, rememberView);
+
+function rememberView() {
+  try { sessionStorage.setItem(viewKey, JSON.stringify({tab: state.tab, period: climate.period})); } catch {}
+}
+
+function savedView() {
+  try { return JSON.parse(sessionStorage.getItem(viewKey) || "null"); } catch { return null; }
+}
 
 function journalRequest(query = {}) {
   return request("/v1/journal?" + new URLSearchParams({session_id: state.session, ...query}));
@@ -69,12 +78,14 @@ function link(text, kind) {
 }
 
 function selectView(tab) {
+  if (!state.unlocked) return;
   state.tab = tab;
   $("chat").hidden = tab !== "chat";
   $("climate").hidden = tab !== "climate";
   for (const view of ["chat", "climate"]) $("tab-" + view).setAttribute("aria-pressed", view === tab);
   if (tab === "climate") climate.open();
   else climate.close();
+  rememberView();
 }
 
 function nowStamp(at) {
@@ -226,9 +237,12 @@ async function openArchive(token, session) {
     $("token").value = "";
     $("gate").hidden = true;
     $("navigation").hidden = false;
-    selectView("chat");
+    $("chat").hidden = false;
     if (!page.entries.length) showWords("Bring me an observation, little keeper. Type help for the local command cant.");
     addEntries(page.entries, {scroll: true});
+    const view = savedView();
+    climate.select(view?.period);
+    selectView(view?.tab === "climate" ? "climate" : "chat");
     link("[ LINK ONLINE ]", "live");
     notice("chat-status", "[ ARCHIVE ] F8 to talk.");
     setControls();

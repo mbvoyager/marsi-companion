@@ -76,7 +76,8 @@ subprocess in the Pi app is the fixed `aplay` playback program.
 ## API
 
 Authenticated requests use `Authorization: Bearer YOUR_TOKEN`. JSON requests
-use `Content-Type: application/json`. The only unauthenticated route is health.
+use `Content-Type: application/json`. The browser page, its static assets and
+`/health` are available before authentication.
 
 | Method / route | Input | Result |
 | --- | --- | --- |
@@ -88,6 +89,9 @@ use `Content-Type: application/json`. The only unauthenticated route is health.
 | `GET /v1/journal` | `session_id`, optional `before` or `after`, `limit` 1–100 | Chronological journal page and `has_more` |
 | `GET /v1/telemetry` | None | Numeric server readings and fresh Pi readings |
 | `POST /v1/telemetry` | `readings` object | Accept validated numeric Pi readings; return both machines |
+| `GET /v1/climate/now` | None | Latest archived values, per-metric timestamps and freshness for each configured sensor |
+| `GET /v1/climate/history` | `range=3h`, `24h` or `7d` | UTC window bounds and per-sensor temperature and humidity series. Longer windows return bucket means |
+| `GET /v1/climate/events` | `Accept: text/event-stream` | Initial snapshot and live `climate` events after readings or freshness change |
 | `POST /v1/speak` | `session_id`, `entry_id`, `want_audio=true` | Read a persisted art/sermon/morning entry's spoken version |
 | `POST /v1/voice-check` | `session_id`, `want_audio=true`, optional `text` up to 300 characters | Piper diagnostic only; no Whisper, Qwen or journal writes |
 | `GET /v1/memory?session_id=pi` | Session in query | Explicit notes |
@@ -98,7 +102,7 @@ Chat text is capped at 2,000 characters. WAV uploads are capped at 2 MB and
 20 seconds, mono 16-bit PCM. One task at a time runs on the old CPU; simultaneous
 inference requests receive a retryable error. Telemetry/journal reads do not take
 the inference lock, so the display can refresh while Qwen works. This is a small LAN prototype,
-not a public internet service. No browser frontend or CORS is required.
+not a public internet service. The browser app uses the same origin as the API.
 
 Spoken replies include `audio_base64` for the **complete** WAV and `audio_info`
 with `bytes` and `sha256`. The Pi checks supplied metadata before playback.
@@ -120,6 +124,7 @@ python3 -m venv .venv-tests
 .venv-tests/bin/python -m unittest discover -s tests -v
 .venv-tests/bin/python -m compileall -q marsi_local
 for script in scripts/*.sh deploy/marsi-xsession.sh; do bash -n "$script"; done
+node --test tests/web_climate_history.mjs
 ```
 
 Tests exercise real local HTTP requests and a temporary SQLite database, with
@@ -128,6 +133,9 @@ forgetting, busy handling, WAV limits, speech failure behaviour and quiet hours.
 They also exercise journal migration and pagination, recall, numeric-only
 telemetry, persistent routine targets, missed mornings and daylight-saving changes.
 They do not benchmark real models. The script bot has its own separate test suite.
+The climate tests archive two synthetic sensor reports, check their UTC timestamps
+in SQLite and read them after a fresh server instance starts. The browser tests
+exercise login, page reload and overlapping live updates without a physical sensor.
 Language tests use the real offline detector with synthetic German/English text.
 They cover bounded rewrites, unchanged old archives, rejecting failed drafts
 before synthesis, missing-dependency errors and a diagnostic that fails for a

@@ -261,10 +261,46 @@ snapshots are skipped and repeated writes for the same sensor, metric and
 millisecond use one row. An update without `last_seen` uses the arrival time.
 The archive records reports that reach Marsi while its subscriber is running.
 
+### Check the SQLite file if history looks empty
+
+The user service runs from `~/marsi-companion`. Its default database is
+`data/companion.sqlite3` in that checkout. `MARSI_DATABASE` in `.env.server`
+can point to another persistent file. The database is on Ubuntu alongside
+Marsi, outside the Mosquitto and Zigbee2MQTT containers.
+
+Run this read-only query from the Ubuntu checkout to find the file and count
+the stored climate values. It prints the first and last timestamps in UTC.
+
+```bash
+cd ~/marsi-companion
+.venv-server/bin/python - <<'PY'
+from contextlib import closing
+import sqlite3
+
+from marsi_local.config import ServerConfig, load_env
+
+load_env('.env.server')
+path = ServerConfig.from_env().database.resolve()
+print('Database:', path)
+with closing(sqlite3.connect(path.as_uri() + '?mode=ro', uri=True)) as db:
+    print('Rows, oldest UTC, newest UTC:', db.execute('''
+        SELECT count(*), datetime(min(observed_ms)/1000, 'unixepoch'),
+               datetime(max(observed_ms)/1000, 'unixepoch')
+        FROM climate_readings WHERE metric IN ('temperature', 'humidity')
+    ''').fetchone())
+PY
+```
+
+Compare the newest timestamp with the time range you selected. For example,
+readings from yesterday can be outside **3 h** and still appear in **7 days**.
+After changing the server's database setting, check that the service opens the
+same file as the query.
+
 ## Read the archive over Marsi's API
 
 The climate routes use the existing Marsi server address and bearer token.
-Timestamps are Unix milliseconds in UTC. All routes are read-only.
+Timestamps are stored and sent as Unix milliseconds in UTC. The Pi and browser
+format them in their respective local time zones. All climate routes are read-only.
 
 | GET route | Response |
 | --- | --- |
@@ -364,7 +400,9 @@ tabs remember their login for the tab's session. **LOCK** or `exit` seals it.
 Choose **CLIMATE** to view the cards, history and live updates. In a history
 view, tap a graph to inspect the nearest samples, or use the left and right
 arrow keys when a graph is focused. Tap a sensor in the legend to hide or show
-its trace. **CHAT** uses the shared journal, supports the same typed commands,
+its trace. The browser remembers the last view and climate range in that tab.
+After login or a page reload, it fetches the selected history from Ubuntu again.
+**CHAT** uses the shared journal, supports the same typed commands,
 and shows readings from Ubuntu and the Pi. Enable **Voice** for spoken
 replies. Use the audio player's Play control if the browser waits for a tap.
 Scheduled entries are visible in the journal. Browser playback depends on

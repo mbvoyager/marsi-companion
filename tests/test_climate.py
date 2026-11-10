@@ -2,6 +2,7 @@ import io
 import json
 from contextlib import closing, redirect_stdout
 from pathlib import Path
+import sqlite3
 import tempfile
 import threading
 from types import SimpleNamespace
@@ -47,12 +48,13 @@ class ClimateTests(unittest.TestCase):
     def measure(self, sensor_id, observed_ms, **values):
         self.deliver(json.dumps({"last_seen": observed_ms, **values}).encode(), sensor_id)
 
-    def http_api(self):
-        thread = threading.Thread(target=self.server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True)
+    def http_api(self, server=None):
+        server = self.server if server is None else server
+        thread = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True)
         thread.start()
         self.addCleanup(thread.join, 2)
-        self.addCleanup(self.server.shutdown)
-        return Client(f"http://127.0.0.1:{self.server.server_port}", token=self.app.config.token, timeout=2)
+        self.addCleanup(server.shutdown)
+        return Client(f"http://127.0.0.1:{server.server_port}", token=self.app.config.token, timeout=2)
 
     def test_subscribes_again_after_reconnect(self):
         self.client.connect_async.assert_called_once_with("127.0.0.1", 1883, keepalive=30)
@@ -141,6 +143,37 @@ class ClimateTests(unittest.TestCase):
             with self.assertRaises(ClientError) as invalid:
                 api.request(f"/v1/climate/history?range={period}", method="GET")
             self.assertEqual(invalid.exception.status, 400)
+
+    def test_two_sensors_history_survives_login_and_server_restart(self):
+        at = 1_767_225_600_051
+        self.deliver(b'{"last_seen":"2026-01-01T01:00:00.051+01:00","temperature":21,"humidity":50}')
+        self.deliver(b'{"last_seen":"2025-12-31T19:00:00.051-05:00","temperature":8,"humidity":70}',
+                     "sim-exterior")
+        database = self.app.config.database
+        with closing(sqlite3.connect(database.as_uri() + "?mode=ro", uri=True)) as db:
+            rows = db.execute("""
+                SELECT sensor_id, count(*), min(observed_ms), max(observed_ms)
+                FROM climate_readings GROUP BY sensor_id ORDER BY sensor_id
+            """).fetchall()
+        self.assertEqual(rows, [("sim-exterior", 2, at, at), ("test-forge", 2, at, at)])
+
+        api = self.http_api()
+        with patch("marsi_local.climate.time.time_ns", return_value=(at + 60_000) * 1_000_000):
+            before = api.climate_history("3h")
+            api.journal()
+            self.assertEqual(api.climate_history("3h"), before)
+            self.assertEqual([sensor["series"]["temperature"] for sensor in before["sensors"]],
+                             [[[at, 21]], [[at, 8]]])
+
+            self.server.shutdown()
+            self.server.server_close()
+            restarted = Server(("127.0.0.1", 0), Companion(self.app.config))
+            self.addCleanup(restarted.server_close)
+            with patch("marsi_local.climate._mqtt_client", return_value=Mock()):
+                restarted.start_climate()
+            reopened = self.http_api(restarted)
+            reopened.journal()
+            self.assertEqual(reopened.climate_history("3h"), before)
 
     def test_stream_pushes_new_reading_and_later_freshness_change(self):
         now = 1_800_000_000_000
