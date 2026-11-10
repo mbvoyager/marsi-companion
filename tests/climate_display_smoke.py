@@ -19,12 +19,16 @@ def sample_snapshot(temperature=21.5):
             "id": f"demo-{index}", "name": name,
             "location": "outdoor" if index == 1 else "indoor", "color": None,
             "status": "stale" if index == 1 else "fresh", "last_measurement_ms": at,
+            "last_report_ms": at, "connection": "lost" if index == 1 else "connected", "battery_low": index == 0,
             "readings": {
                 "temperature": {"value": temperature - 5 * index, "observed_ms": at},
                 "humidity": {"value": 50 + 7 * index, "observed_ms": at},
+                "battery": {"value": 18 if index == 0 else 95, "observed_ms": at},
+                "linkquality": {"value": 170, "observed_ms": at},
             },
         })
-    return {"sensors": sensors, "stale_after_ms": 7_200_000, "generated_ms": NOW}
+    return {"sensors": sensors, "stale_after_ms": 7_200_000, "generated_ms": NOW,
+            "services": {"mqtt": "online", "zigbee2mqtt": "online"}}
 
 
 class ClimatePreviewClient:
@@ -99,6 +103,10 @@ class ClimateDisplaySmoke(unittest.TestCase):
             self.pump_until(lambda: not self.panel.dirty and len(self.panel.canvas.find_withtag("climate-card")) >= 2)
             self.assertIn("[OUTDOOR]", self.labels())
             self.assertIn("STALE READING", self.labels())
+            self.assertIn("CONNECTED", self.labels())
+            self.assertIn("SIGNAL LOST", self.labels())
+            self.assertIn("BAT LOW 18%   LQI 170", self.labels())
+            self.assertEqual(self.panel.services.cget("text"), "MQTT ONLINE   /   ZIGBEE2MQTT ONLINE")
             self.check_text_fits()
             for period in ("3h", "24h", "7d"):
                 self.panel.tabs[period].invoke()

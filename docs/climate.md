@@ -310,11 +310,19 @@ format them in their respective local time zones. All climate routes are read-on
 | `/v1/climate/history?range=7d` | Temperature and humidity means in thirty-minute buckets |
 | `/v1/climate/events` | Server-sent `climate` events with the current snapshot |
 
-The `now` response includes `last_measurement_ms` for the most recent
-temperature or humidity reading and `last_report_ms` for the newest archived
-report of any kind. A sensor is `waiting` before its first temperature or
-humidity reading, `fresh` for two hours from the latest measurement and then
-`stale`. Battery and link quality have their own timestamps.
+The `now` response and live snapshots include `last_measurement_ms` for the
+latest temperature or humidity reading and `last_report_ms` for the latest
+sensor report Marsi received. A reading is `waiting` before the first
+measurement, `fresh` for two hours, then `stale`. Battery and link quality
+(LQI) have their own timestamps. Battery levels at or below 20% show a warning.
+
+The separate sensor connection is `connected` after a report in the last three
+hours, `waiting` before the first report, or `lost` after three hours of silence.
+If Marsi cannot verify both services, sensor connection is `unknown`. The
+MQTT status comes from Marsi's broker connection. Zigbee2MQTT publishes its
+own `bridge/state` over MQTT. Old measurements remain visible with their
+timestamps during a service interruption.
+[Zigbee2MQTT bridge status](https://www.zigbee2mqtt.io/guide/usage/mqtt_topics_and_messages.html#zigbee2mqtt-bridge-state)
 
 Each history series is an array of `[time_ms, value]` pairs. The server averages
 each sensor and metric separately inside UTC-aligned buckets. `bucket_ms` is
@@ -361,8 +369,9 @@ Update the Pi checkout to the version with the climate display and restart the
 graphical session. A Pi with Marsi autostart enabled can reboot into the new
 display. See the [Pi setup guide](raspberry-pi.md) for the usual start commands.
 
-Choose **CLIMATE** above the journal. **Now** shows the temperature, relative
-humidity and time of the latest measurement. **OUTDOOR** identifies an outdoor
+Choose **CLIMATE** above the journal. **Now** shows temperature, relative
+humidity, the last measurement and report times, sensor connection, battery
+and LQI. Both services have status labels above the cards. **OUTDOOR** identifies an outdoor
 sensor and **STALE READING** marks an older climate reading. In **3 h**, **24 h** and
 **7 days**, the temperature and humidity use separate plots with a shared time
 axis. Sensor names, colors and line patterns identify the traces. Wide gaps in

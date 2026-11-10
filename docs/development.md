@@ -89,9 +89,9 @@ use `Content-Type: application/json`. The browser page, its static assets and
 | `GET /v1/journal` | `session_id`, optional `before` or `after`, `limit` 1–100 | Chronological journal page and `has_more` |
 | `GET /v1/telemetry` | None | Numeric server readings and fresh Pi readings |
 | `POST /v1/telemetry` | `readings` object | Accept validated numeric Pi readings; return both machines |
-| `GET /v1/climate/now` | None | Latest archived values, per-metric timestamps and freshness for each configured sensor |
+| `GET /v1/climate/now` | None | Latest values, report and measurement timestamps, sensor connection, battery warning and MQTT/Zigbee2MQTT states |
 | `GET /v1/climate/history` | `range=3h`, `24h` or `7d` | UTC window bounds and per-sensor temperature and humidity series. Longer windows return bucket means |
-| `GET /v1/climate/events` | `Accept: text/event-stream` | Initial snapshot and live `climate` events after readings or freshness change |
+| `GET /v1/climate/events` | `Accept: text/event-stream` | Initial snapshot and live `climate` events after readings, freshness or service states change |
 | `POST /v1/speak` | `session_id`, `entry_id`, `want_audio=true` | Read a persisted art/sermon/morning entry's spoken version |
 | `POST /v1/voice-check` | `session_id`, `want_audio=true`, optional `text` up to 300 characters | Piper diagnostic only; no Whisper, Qwen or journal writes |
 | `GET /v1/memory?session_id=pi` | Session in query | Explicit notes |

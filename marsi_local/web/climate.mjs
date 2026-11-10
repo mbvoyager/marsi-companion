@@ -1,6 +1,7 @@
 const PALETTE = ["#9fbf97", "#bca273", "#da7769", "#d8cbb0"];
 const DASHES = [[], [6, 3], [2, 3], [7, 3, 2, 3]];
 const STATES = {fresh: "FRESH", stale: "STALE READING", waiting: "WAITING FOR DATA"};
+const CONNECTIONS = {connected: "CONNECTED", lost: "SIGNAL LOST", waiting: "AWAITING SIGNAL", unknown: "SIGNAL UNKNOWN"};
 const METRICS = ["temperature", "humidity"];
 const number = new Intl.NumberFormat("en-GB", {minimumFractionDigits: 1, maximumFractionDigits: 1});
 const dateTime = new Intl.DateTimeFormat("en-GB", {dateStyle: "short", timeStyle: "short"});
@@ -51,6 +52,8 @@ export class ClimateView {
     this.legend = document.querySelector("#legend");
     this.message = document.querySelector("#climate-message");
     this.link = document.querySelector("#climate-link");
+    this.services = document.querySelector("#climate-services");
+    this.statusAvailable = false;
     this.refreshButton = document.querySelector("#climate-refresh");
     this.refreshStatus = document.querySelector("#climate-refresh-status");
     this.buttons = [...document.querySelectorAll("[data-period]")];
@@ -92,6 +95,7 @@ export class ClimateView {
   close() {
     this.feed?.abort();
     this.feed = null;
+    this.statusAvailable = false;
     this.cancelHistory();
     clearInterval(this.windowTimer);
   }
@@ -125,6 +129,7 @@ export class ClimateView {
       }
       if (!this.snapshot || snapshot.generated_ms >= this.snapshot.generated_ms) {
         this.snapshot = snapshot;
+        this.statusAvailable = true;
         this.render();
       }
       this.refreshStatus.textContent = "Archive checked. Sensor reports arrive automatically.";
@@ -161,6 +166,7 @@ export class ClimateView {
               const snapshot = JSON.parse(line.slice(6));
               if (!Array.isArray(snapshot.sensors)) throw new Error("Invalid climate snapshot");
               this.snapshot = snapshot;
+              this.statusAvailable = true;
               retry = 1000;
               this.setLink("[ LIVE ]", "live");
               this.message.textContent = "";
@@ -173,10 +179,12 @@ export class ClimateView {
         }
       } catch (error) {
         if (signal.aborted) return;
+        this.statusAvailable = false;
         this.setLink("[ LINK PAUSE ]", "waiting");
         this.message.textContent = error.status === 503
           ? "Check the climate archive on Ubuntu."
           : "Reconnecting to the climate archive ...";
+        this.render();
         await delay(retry, signal);
         retry = Math.min(retry * 2, 8000);
       }
@@ -244,6 +252,9 @@ export class ClimateView {
   }
 
   render() {
+    const services = this.statusAvailable ? this.snapshot?.services : null;
+    const service = name => (services?.[name] || "unknown").toUpperCase();
+    this.services.textContent = `MQTT ${service("mqtt")}  /  ZIGBEE2MQTT ${service("zigbee2mqtt")}`;
     const isNow = this.period === "now";
     this.cards.hidden = !isNow;
     this.historyPanel.hidden = isNow;
@@ -267,13 +278,24 @@ export class ClimateView {
       title.prepend(cog);
       head.append(title, text("span", sensor.location === "outdoor" ? "[ OUTDOOR ]" : "[ INDOOR ]", "badge"));
       const value = metric => sensor.readings[metric] ? number.format(sensor.readings[metric].value) : "--";
+      const details = text("div", "", "card-footer");
+      const battery = sensor.readings.battery?.value;
+      const power = text("span", battery == null ? "Battery --" : `Battery ${battery}%${sensor.battery_low ? " LOW" : ""}`);
+      if (sensor.battery_low) power.dataset.status = "low";
+      details.append(power, text("span", `LQI ${sensor.readings.linkquality?.value ?? "--"}`));
+      const signal = text("div", "", "card-footer");
+      const connection = this.statusAvailable ? sensor.connection || "unknown" : "unknown";
+      const badge = text("span", CONNECTIONS[connection]);
+      badge.dataset.status = connection;
+      const seen = sensor.last_report_ms == null ? "--" : dateTime.format(sensor.last_report_ms);
+      signal.append(text("span", `Last report ${seen}`), badge);
       const foot = text("div", "", "card-footer");
-      const stamp = sensor.last_measurement_ms == null ? "Last reading --" : dateTime.format(sensor.last_measurement_ms);
+      const stamp = sensor.last_measurement_ms == null ? "--" : dateTime.format(sensor.last_measurement_ms);
       const state = text("span", STATES[sensor.status] || STATES.waiting);
       state.dataset.status = sensor.status;
-      foot.append(text("span", stamp), state);
+      foot.append(text("span", `Last reading ${stamp}`), state);
       tile.append(head, text("p", `${value("temperature")} °C`, "reading"),
-                  text("p", `${value("humidity")} % RH`, "humidity"), foot);
+                  text("p", `${value("humidity")} % RH`, "humidity"), details, signal, foot);
       return tile;
     }));
     if (!sensors.length) this.cards.append(text("p", "Waiting for the climate archive ...", "message"));

@@ -17,6 +17,12 @@ SENSOR_STATES = {
     "stale": ("STALE READING", RED),
     "waiting": ("WAITING FOR DATA", BRASS),
 }
+CONNECTION_STATES = {
+    "connected": ("CONNECTED", GREEN),
+    "lost": ("SIGNAL LOST", RED),
+    "waiting": ("AWAITING SIGNAL", BRASS),
+    "unknown": ("SIGNAL UNKNOWN", BRASS),
+}
 
 
 class ClimateView:
@@ -30,13 +36,14 @@ class ClimateView:
         self.period, self.page = "now", 0
         self.snapshot = self.history = None
         self.feed_status = None
+        self.status_available = False
         self.history_busy = self.history_error = False
         self.history_at = 0.0
         self.dirty = True
 
         self.frame = tk.Frame(parent, bg=BLACK, highlightbackground=RED, highlightthickness=1)
         self.frame.columnconfigure(0, weight=1)
-        self.frame.rowconfigure(1, weight=1)
+        self.frame.rowconfigure(2, weight=1)
         bar = tk.Frame(self.frame, bg=BLACK)
         bar.grid(row=0, column=0, sticky="ew", padx=5, pady=(3, 0))
         self.tabs = {}
@@ -56,8 +63,10 @@ class ClimateView:
         self.next = button(self.pages, ">", lambda: self.turn_page(1))
         self.next.pack(side="left")
 
+        self.services = tk.Label(self.frame, bg=BLACK, fg=BRASS, font=(mono, -11))
+        self.services.grid(row=1, column=0, sticky="w", padx=5)
         self.canvas = tk.Canvas(self.frame, bg=BLACK, highlightthickness=0, width=1, height=1)
-        self.canvas.grid(row=1, column=0, sticky="nsew")
+        self.canvas.grid(row=2, column=0, sticky="nsew")
         self.canvas.bind("<Configure>", self.invalidate)
         self.refresh_status = tk.Label(self.frame, bg=BLACK, fg=BRASS, font=(mono, -11))
         self.cog = Electoo(self.canvas, mono)
@@ -86,7 +95,7 @@ class ClimateView:
     def refresh(self):
         self.refresh_button.configure(state="disabled")
         self.refresh_status.configure(text="Checking the archive ...")
-        self.refresh_status.grid(row=2, column=0, sticky="w", padx=5)
+        self.refresh_status.grid(row=3, column=0, sticky="w", padx=5)
         threading.Thread(target=self.fetch_current, daemon=True).start()
 
     def fetch_current(self):
@@ -111,6 +120,7 @@ class ClimateView:
         if kind == "snapshot":
             self.snapshot = data
             self.feed_status = None
+            self.status_available = True
             self.status.configure(text="[ LIVE ]", fg=GREEN)
             self.history_at = 0
         elif kind == "refresh":
@@ -121,9 +131,11 @@ class ClimateView:
                 self.refresh_status.configure(text="Archive checked. Sensor reports arrive automatically.")
                 if self.snapshot is None or data["generated_ms"] >= self.snapshot.get("generated_ms", 0):
                     self.snapshot = data
+                    self.status_available = True
                 self.history_at = 0
         elif kind == "offline":
             self.feed_status = data
+            self.status_available = False
             self.status.configure(text="[ LINK PAUSE ]", fg=BRASS)
         elif kind == "history":
             self.history_busy = False
@@ -181,6 +193,10 @@ class ClimateView:
         return text if len(text) <= limit else text[:limit - 3] + "..."
 
     def draw(self):
+        services = (self.snapshot or {}).get("services", {}) if self.status_available else {}
+        mqtt = services.get("mqtt", "unknown").upper()
+        bridge = services.get("zigbee2mqtt", "unknown").upper()
+        self.services.configure(text=f"MQTT {mqtt}   /   ZIGBEE2MQTT {bridge}")
         c = self.canvas
         width, height = c.winfo_width(), c.winfo_height()
         c.delete("all")
@@ -202,12 +218,12 @@ class ClimateView:
             c.create_text(width / 2, height / 2 + 9, text=message, fill=BONE, font=self.label_font)
 
     def draw_cards(self, sensors, width, height):
-        columns = min(len(sensors), 2 if width >= 370 else 1)
-        rows_per_page = 2 if height >= 182 else 1
+        columns = min(len(sensors), 2 if width >= 440 else 1)
+        rows_per_page = 2 if height >= 280 else 1
         visible = self.page_of(sensors, columns * rows_per_page)
         rows = ceil(len(visible) / columns)
         w = (width - 16 - 8 * (columns - 1)) / columns
-        h = min(150, (height - 16 - 8 * (rows - 1)) / rows)
+        h = min(172, (height - 16 - 8 * (rows - 1)) / rows)
         for position, (index, sensor) in enumerate(visible):
             x = 8 + (position % columns) * (w + 8)
             y = 8 + (position // columns) * (h + 8)
@@ -229,15 +245,31 @@ class ClimateView:
         humidity = readings.get("humidity", {}).get("value")
         temp_text = "--" if temperature is None else f"{temperature:.1f}"
         humidity_text = "--" if humidity is None else f"{humidity:.1f}"
-        c.create_text(x + 10, y + h * .44, text=temp_text + " °C", anchor="w", fill=GREEN,
-                      font=(self.mono, -30 if h >= 110 else -22, "bold"), tags="climate-temperature")
-        c.create_text(x + 11, y + h * .69, text=humidity_text + " % RH", anchor="w", fill=BONE,
-                      font=(self.mono, -14 if h >= 110 else -12), tags="climate-humidity")
-        observed = sensor.get("last_measurement_ms")
-        stamp = "--" if observed is None else datetime.fromtimestamp(observed / 1000).strftime("%d/%m %H:%M")
+        c.create_text(x + 10, y + 38, text=temp_text + " °C", anchor="w", fill=GREEN,
+                      font=(self.mono, -28, "bold"), tags="climate-temperature")
+        c.create_text(x + 11, y + 61, text=humidity_text + " % RH", anchor="w", fill=BONE,
+                      font=(self.mono, -13), tags="climate-humidity")
+        battery = readings.get("battery", {}).get("value")
+        linkquality = readings.get("linkquality", {}).get("value")
+        battery_text = "--" if battery is None else f"{battery:g}%"
+        lqi = "--" if linkquality is None else f"{linkquality:g}"
+        low = sensor.get("battery_low", False)
+        battery_label = "BAT LOW" if low else "BAT"
+        c.create_text(x + 11, y + h - 43, text=f"{battery_label} {battery_text}   LQI {lqi}",
+                      anchor="w", fill=RED if low else BONE, font=self.label_font)
+        connection = sensor.get("connection", "unknown") if self.status_available else "unknown"
+        label, color = CONNECTION_STATES[connection]
+        c.create_text(x + 11, y + h - 26, text="Seen " + self.stamp(sensor.get("last_report_ms")),
+                      anchor="w", fill=BRASS, font=self.label_font)
+        c.create_text(x + w - 9, y + h - 26, text=label, anchor="e", fill=color, font=self.label_font)
         label, color = SENSOR_STATES[sensor["status"]]
-        c.create_text(x + 11, y + h - 9, text=stamp, anchor="w", fill=BRASS, font=self.label_font)
+        c.create_text(x + 11, y + h - 9, text="Read " + self.stamp(sensor.get("last_measurement_ms")),
+                      anchor="w", fill=BRASS, font=self.label_font)
         c.create_text(x + w - 9, y + h - 9, text=label, anchor="e", fill=color, font=self.label_font)
+
+    @staticmethod
+    def stamp(at):
+        return "--" if at is None else datetime.fromtimestamp(at / 1000).strftime("%d/%m %H:%M")
 
     def draw_charts(self, history, width, height):
         sensors = self.page_of(history["sensors"], 4)

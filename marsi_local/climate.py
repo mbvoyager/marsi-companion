@@ -29,6 +29,8 @@ MAX_TIMESTAMP_MS = 253_402_300_799_999
 MINUTE_MS = 60_000
 HOUR_MS = 60 * MINUTE_MS
 STALE_AFTER_MS = 2 * HOUR_MS
+LINK_LOST_AFTER_MS = 3 * HOUR_MS
+LOW_BATTERY_PERCENT = 20
 CLIMATE_METRICS = ("temperature", "humidity")
 # The period and bucket width in milliseconds. A zero width preserves the samples.
 HISTORY_WINDOWS = {
@@ -136,15 +138,24 @@ class ClimateArchive:
         self.updates = threading.Condition()
         self.revision = 0
         with memory.connect() as db:
-            db.execute("""
+            db.executescript("""
                 CREATE TABLE IF NOT EXISTS climate_readings (
                     sensor_id TEXT NOT NULL,
                     metric TEXT NOT NULL,
                     observed_ms INTEGER NOT NULL,
                     value REAL NOT NULL,
                     PRIMARY KEY (sensor_id, metric, observed_ms)
-                ) WITHOUT ROWID
+                ) WITHOUT ROWID;
+                CREATE TABLE IF NOT EXISTS climate_reports (
+                    sensor_id TEXT PRIMARY KEY,
+                    observed_ms INTEGER NOT NULL
+                ) WITHOUT ROWID;
             """)
+
+    def changed(self):
+        with self.updates:
+            self.revision += 1
+            self.updates.notify_all()
 
     def record(self, sensor_id: str, payload: bytes) -> None:
         if len(payload) > 16_384:
@@ -162,25 +173,30 @@ class ClimateArchive:
             value = data.get(metric)
             if type(value) in (int, float) and minimum <= value <= maximum:
                 rows.append((sensor_id, metric, observed_ms, float(value)))
-        if rows:
-            with self.memory.connect() as db:
-                changed = db.executemany("""
-                    INSERT INTO climate_readings (sensor_id, metric, observed_ms, value)
-                    VALUES (?, ?, ?, ?)
-                    ON CONFLICT (sensor_id, metric, observed_ms) DO UPDATE SET value=excluded.value
-                    WHERE climate_readings.value <> excluded.value
-                """, rows).rowcount
-            if changed:
-                # Publish only after the transaction commits so readers can see the change.
-                with self.updates:
-                    self.revision += 1
-                    self.updates.notify_all()
+        if not rows and data.get("last_seen") is None:
+            return
+        with self.memory.connect() as db:
+            changed = db.executemany("""
+                INSERT INTO climate_readings (sensor_id, metric, observed_ms, value)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT (sensor_id, metric, observed_ms) DO UPDATE SET value=excluded.value
+                WHERE climate_readings.value <> excluded.value
+            """, rows).rowcount
+            if observed_ms <= time.time_ns() // 1_000_000:
+                changed += db.execute("""
+                    INSERT INTO climate_reports VALUES (?, ?)
+                    ON CONFLICT (sensor_id) DO UPDATE SET observed_ms=excluded.observed_ms
+                    WHERE climate_reports.observed_ms < excluded.observed_ms
+                """, (sensor_id, observed_ms)).rowcount
+        if changed:
+            self.changed()
 
     def current(self) -> dict:
         now = time.time_ns() // 1_000_000
         sensors = []
         with self.memory.connect() as db:
             db.execute("BEGIN")
+            reports = dict(db.execute("SELECT sensor_id, observed_ms FROM climate_reports WHERE observed_ms<=?", (now,)))
             for sensor_id, sensor in self.config.sensors.items():
                 readings = _latest_readings(db, sensor_id, now)
                 measured = max((readings[metric]["observed_ms"] for metric in CLIMATE_METRICS
@@ -189,10 +205,16 @@ class ClimateArchive:
                     status = "waiting"
                 else:
                     status = "stale" if now - measured >= STALE_AFTER_MS else "fresh"
+                report = reports.get(sensor_id)
+                for reading in readings.values():
+                    at = reading["observed_ms"]
+                    report = at if report is None else max(report, at)
+                battery = readings.get("battery")
                 sensors.append({
                     "id": sensor_id, **asdict(sensor), "status": status,
                     "last_measurement_ms": measured,
-                    "last_report_ms": max((reading["observed_ms"] for reading in readings.values()), default=None),
+                    "last_report_ms": report,
+                    "battery_low": battery is not None and battery["value"] <= LOW_BATTERY_PERCENT,
                     "readings": readings,
                 })
         return {"generated_ms": now, "stale_after_ms": STALE_AFTER_MS, "sensors": sensors}
@@ -243,6 +265,8 @@ class ClimateSubscriber:
     def __init__(self, config: ClimateConfig, memory: Memory):
         self.config = config
         self.topics = {config.topic(sensor_id): sensor_id for sensor_id in config.sensors}
+        self.bridge_state_topic = f"{config.base_topic}/bridge/state"
+        self.services = {"mqtt": "offline", "zigbee2mqtt": "unknown"}
         self.client = _mqtt_client(config)
         self.archive = ClimateArchive(memory, config)
         self.client.on_connect = self._connected
@@ -260,27 +284,64 @@ class ClimateSubscriber:
         self.client.disconnect()
         self.client.loop_stop()
 
+    def current(self) -> dict:
+        snapshot = self.archive.current()
+        with self.archive.updates:
+            services = self.services.copy()
+        snapshot["services"] = services
+        for sensor in snapshot["sensors"]:
+            report = sensor["last_report_ms"]
+            if services["mqtt"] != "online" or services["zigbee2mqtt"] != "online":
+                connection = "unknown"
+            elif report is None:
+                connection = "waiting"
+            elif snapshot["generated_ms"] - report >= LINK_LOST_AFTER_MS:
+                connection = "lost"
+            else:
+                connection = "connected"
+            sensor["connection"] = connection
+        return snapshot
+
+    def _service_state(self, **state):
+        with self.archive.updates:
+            if any(self.services[name] != value for name, value in state.items()):
+                self.services.update(state)
+                self.archive.changed()
+
     def _connected(self, client, _userdata, _flags, reason, _properties):
         if reason.is_failure:
+            self._service_state(mqtt="offline", zigbee2mqtt="unknown")
             LOG.warning("Climate MQTT connection refused (%s)", reason)
             return
-        client.subscribe([(topic, 1) for topic in self.topics])
+        self._service_state(mqtt="online", zigbee2mqtt="unknown")
+        client.subscribe([(topic, 1) for topic in (*self.topics, self.bridge_state_topic)])
 
     def _connect_failed(self, _client, _userdata):
+        self._service_state(mqtt="offline", zigbee2mqtt="unknown")
         LOG.warning("Climate MQTT unavailable. Retrying.")
 
     def _disconnected(self, _client, _userdata, _flags, reason, _properties):
+        self._service_state(mqtt="offline", zigbee2mqtt="unknown")
         if reason.is_failure:
             LOG.warning("Climate MQTT link lost. Reconnecting.")
 
     def _subscribed(self, _client, _userdata, _mid, reasons, _properties):
-        accepted = sum(not reason.is_failure for reason in reasons)
+        accepted = sum(not reason.is_failure for reason in reasons[:len(self.topics)])
         if accepted < len(self.topics):
             LOG.warning("Climate MQTT subscription incomplete (%d/%d topics)", accepted, len(self.topics))
         else:
             LOG.info("Climate MQTT subscribed to %d sensor topic(s)", accepted)
 
     def _received(self, _client, _userdata, message):
+        if message.topic == self.bridge_state_topic:
+            try:
+                payload = json.loads(message.payload) if len(message.payload) <= 1024 else None
+            except (ValueError, RecursionError):
+                return
+            state = payload.get("state") if isinstance(payload, dict) else None
+            if state in ("online", "offline"):
+                self._service_state(zigbee2mqtt=state)
+            return
         sensor_id = self.topics.get(message.topic)
         # A retained snapshot replayed on subscription is not a fresh report.
         if sensor_id is None or message.retain:

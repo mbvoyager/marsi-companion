@@ -129,8 +129,8 @@ audio { width: min(100%, 26rem); margin-top: .55rem; }
 .reading { color: var(--green); font-size: clamp(2rem, 8vw, 3.15rem); line-height: 1.15; margin-top: .28rem; text-shadow: 0 0 .65rem #9fbf972d; }
 .humidity { color: var(--bone); font-size: 1.03rem; }
 .card-footer { font-size: .78rem; color: var(--brass); margin-top: .4rem; }
-.card-footer [data-status="fresh"] { color: var(--green); }
-.card-footer [data-status="stale"] { color: var(--rust); }
+.card-footer [data-status="fresh"], .card-footer [data-status="connected"] { color: var(--green); }
+.card-footer [data-status="stale"], .card-footer [data-status="lost"], .card-footer [data-status="low"] { color: var(--rust); }
 .legend { margin-bottom: .3rem; }
 .legend button { display: inline-flex; align-items: center; text-align: left; gap: .4rem; min-height: 2rem; overflow-wrap: anywhere; font-size: .83rem; }
 .legend button[aria-pressed="false"] { opacity: .58; }

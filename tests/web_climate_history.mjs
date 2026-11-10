@@ -8,7 +8,7 @@ class Element {
   children = [];
   dataset = {};
   listeners = {};
-  style = {};
+  style = {setProperty() {}};
 
   addEventListener(name, listener) { this.listeners[name] = listener; }
   setAttribute(name, value) { this.attributes[name] = String(value); }
@@ -146,4 +146,27 @@ test("live refreshes leave a history request running and coalesce a follow-up", 
   assert.equal(view.history, history);
   view.close();
   assert.equal(requests[1].signal.aborted, true);
+});
+
+test("sensor cards show last report, battery warning and LQI separately from service status", () => {
+  const {node} = mountPage();
+  const view = new ClimateView(() => assert.fail("Unexpected network request"));
+  view.statusAvailable = true;
+  view.snapshot = {services: {mqtt: "online", zigbee2mqtt: "online"}, sensors: [
+    {id: "forge", name: "Forge", location: "indoor", status: "stale", connection: "connected",
+      last_report_ms: 1_800_000_000_000, battery_low: true,
+      readings: {battery: {value: 18}, linkquality: {value: 170}}},
+    {id: "sim-exterior", name: "Simulated exterior", location: "outdoor", status: "stale", connection: "lost",
+      readings: {}},
+  ]};
+  view.render();
+  const [forge, exterior] = node("cards").children;
+  assert.equal(node("climate-services").textContent, "MQTT ONLINE  /  ZIGBEE2MQTT ONLINE");
+  assert.deepEqual(forge.children[3].children.map(label => label.textContent), ["Battery 18% LOW", "LQI 170"]);
+  assert.match(forge.children[4].children[0].textContent, /^Last report .+/);
+  assert.equal(forge.children[4].children[1].textContent, "CONNECTED");
+  assert.equal(exterior.children[4].children[1].textContent, "SIGNAL LOST");
+  view.statusAvailable = false;
+  view.render();
+  assert.equal(node("cards").children[0].children[4].children[1].textContent, "SIGNAL UNKNOWN");
 });

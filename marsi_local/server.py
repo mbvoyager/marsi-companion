@@ -134,7 +134,8 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def stream_climate(self, archive):
+    def stream_climate(self, climate):
+        archive = climate.archive
         slots = self.server.climate_streams
         if not slots.acquire(blocking=False):
             raise ServiceError("Too many climate streams. Try again shortly.", 503)
@@ -154,12 +155,13 @@ class Handler(BaseHTTPRequestHandler):
                     revision = archive.revision
                 if stopping.is_set():
                     break
-                snapshot = archive.current()
-                # Freshness can change during a heartbeat even without a new report.
-                if changed or snapshot["sensors"] != previous:
+                snapshot = climate.current()
+                state = snapshot["sensors"], snapshot["services"]
+                # Freshness and signal can expire even without a new report.
+                if changed or state != previous:
                     payload = json.dumps(snapshot, ensure_ascii=False).encode("utf-8")
                     self.wfile.write(b"event: climate\ndata: " + payload + b"\n\n")
-                    previous = snapshot["sensors"]
+                    previous = state
                 else:
                     self.wfile.write(b": keepalive\n\n")
         except OSError:
@@ -207,15 +209,15 @@ class Handler(BaseHTTPRequestHandler):
                 return self.web_asset(path)
             self.authenticated()
             if method == "GET" and path in ("/v1/climate/now", "/v1/climate/history", "/v1/climate/events"):
-                if self.server.climate is None:
+                climate = self.server.climate
+                if climate is None:
                     raise ServiceError("The climate archive is unavailable. Check the server configuration.", 503)
-                archive = self.server.climate.archive
                 if path == "/v1/climate/events":
-                    return self.stream_climate(archive)
+                    return self.stream_climate(climate)
                 if path == "/v1/climate/history":
                     query = parse_qs(urlsplit(self.path).query, keep_blank_values=True)
-                    return self.respond(200, archive.history(query.get("range", ["3h"])[0]))
-                return self.respond(200, archive.current())
+                    return self.respond(200, climate.archive.history(query.get("range", ["3h"])[0]))
+                return self.respond(200, climate.current())
             if method == "GET" and path == "/v1/journal":
                 query = parse_qs(urlsplit(self.path).query)
                 session = session_name(query.get("session_id", ["pi"])[0])

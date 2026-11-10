@@ -9,7 +9,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
-from marsi_local.climate import ClimateConfig, HOUR_MS, STALE_AFTER_MS, _check_archive
+from marsi_local.climate import ClimateConfig, HOUR_MS, LINK_LOST_AFTER_MS, STALE_AFTER_MS, _check_archive
 from marsi_local.client import Client, ClientError
 from marsi_local.config import ServerConfig
 from marsi_local.core import Companion
@@ -61,7 +61,9 @@ class ClimateTests(unittest.TestCase):
         self.client.loop_start.assert_called_once()
         for _ in range(2):
             self.client.on_connect(self.client, None, None, SimpleNamespace(is_failure=False), None)
-            self.client.subscribe.assert_called_with([("zigbee2mqtt/test-forge", 1), ("zigbee2mqtt/sim-exterior", 1)])
+            self.client.subscribe.assert_called_with([
+                ("zigbee2mqtt/test-forge", 1), ("zigbee2mqtt/sim-exterior", 1), ("zigbee2mqtt/bridge/state", 1),
+            ])
         self.assertEqual(self.client.subscribe.call_count, 2)
 
     def test_split_sensor_reports_keep_their_values_and_millisecond_timestamps(self):
@@ -190,3 +192,35 @@ class ClimateTests(unittest.TestCase):
             self.assertEqual(self.server.climate.archive.revision, 1)
             clock.return_value = (now + STALE_AFTER_MS) * 1_000_000
             self.assertEqual(next(stream)["sensors"][0]["status"], "stale")
+
+    def test_sensor_contact_and_service_status_are_independent_of_measurement_freshness(self):
+        now = 1_800_000_000_000
+        api = self.http_api()
+        with patch("marsi_local.climate.time.time_ns", return_value=now * 1_000_000) as clock:
+            self.client.on_connect(self.client, None, None, SimpleNamespace(is_failure=False), None)
+            self.deliver(b'{"state":"online"}', "bridge/state", retained=True)
+            self.measure("test-forge", now - STALE_AFTER_MS, temperature=21, battery=20, linkquality=170)
+            self.measure("sim-exterior", now - LINK_LOST_AFTER_MS, temperature=8)
+            self.measure("test-forge", now)
+            with patch("marsi_local.server.CLIMATE_HEARTBEAT_SECONDS", 0.1), \
+                    closing(api.climate_events(threading.Event())) as stream:
+                initial = next(stream)
+                self.assertEqual(initial["services"], {"mqtt": "online", "zigbee2mqtt": "online"})
+                forge, exterior = initial["sensors"]
+                self.assertEqual(forge["status"], "stale")
+                self.assertEqual(forge["connection"], "connected")
+                self.assertEqual(forge["last_report_ms"], now)
+                self.assertTrue(forge["battery_low"])
+                self.assertEqual(forge["readings"]["linkquality"]["value"], 170)
+                self.assertEqual(exterior["connection"], "lost")
+                self.assertFalse(exterior["battery_low"])
+
+                clock.return_value = (now + LINK_LOST_AFTER_MS) * 1_000_000
+                self.assertEqual(next(stream)["sensors"][0]["connection"], "lost")
+                self.deliver(b'{"state":"offline"}', "bridge/state")
+                bridge_down = next(stream)
+                self.assertEqual(bridge_down["services"], {"mqtt": "online", "zigbee2mqtt": "offline"})
+                self.assertEqual(bridge_down["sensors"][0]["connection"], "unknown")
+
+                self.client.on_disconnect(self.client, None, None, SimpleNamespace(is_failure=True), None)
+                self.assertEqual(next(stream)["services"], {"mqtt": "offline", "zigbee2mqtt": "unknown"})
