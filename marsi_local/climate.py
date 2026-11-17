@@ -299,7 +299,7 @@ class ClimateArchive:
                 })
         return {"generated_ms": now, "stale_after_ms": STALE_AFTER_MS, "sensors": sensors}
 
-    def history(self, period: str) -> dict:
+    def history(self, period: str, *, summary=False) -> dict:
         if period not in HISTORY_WINDOWS:
             raise ValueError("Climate range must be 3h, 24h or 7d")
         duration, bucket = HISTORY_WINDOWS[period]
@@ -313,6 +313,15 @@ class ClimateArchive:
                 if sensor.hidden or sensor.detached:
                     continue
                 parameters = (sensor_id, *CLIMATE_METRICS, start, end)
+                if summary:
+                    rows = db.execute(
+                        f"SELECT metric, MIN(value), MAX(value), AVG(value), COUNT(*) {window} GROUP BY metric",
+                        parameters,
+                    )
+                    statistics = {metric: {"min": low, "max": high, "mean": mean, "samples": count}
+                                  for metric, low, high, mean, count in rows}
+                    sensors.append({**sensor.public(sensor_id), "statistics": statistics})
+                    continue
                 if bucket:
                     rows = db.execute(
                         f"SELECT metric, (observed_ms / ?) * ? AS at, AVG(value) {window} "
@@ -326,7 +335,7 @@ class ClimateArchive:
                 for metric, at, value in rows:
                     series[metric].append([max(start, at), value])
                 sensors.append({**sensor.public(sensor_id), "series": series})
-        return {"range": period, "from_ms": start, "to_ms": end, "bucket_ms": bucket, "sensors": sensors}
+        return {"range": period, "from_ms": start, "to_ms": end, "bucket_ms": 0 if summary else bucket, "sensors": sensors}
 
 
 def _mqtt_client(config: ClimateConfig):

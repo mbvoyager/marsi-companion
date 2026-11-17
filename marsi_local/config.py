@@ -33,6 +33,15 @@ def validate_url(value: str) -> str:
     return value.rstrip("/")
 
 
+def env_switch(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    if value.lower() not in ("true", "false"):
+        raise ValueError(f"{name} must be true or false")
+    return value.lower() == "true"
+
+
 @dataclass(frozen=True)
 class ServerConfig:
     ollama_url: str = "http://127.0.0.1:11434"
@@ -50,6 +59,8 @@ class ServerConfig:
     morning_hour: int = 7
     climate_config: Path | None = None
     admin_token: str = ""
+    climate_now: bool = True
+    climate_summary: bool = True
 
     def __post_init__(self):
         if self.admin_token and (len(self.token) < 32 or self.admin_token == self.token
@@ -78,6 +89,8 @@ class ServerConfig:
             morning_hour=int(os.getenv("MARSI_MORNING_HOUR", "7")),
             climate_config=Path(climate).expanduser() if climate else None,
             admin_token=os.getenv("MARSI_ADMIN_TOKEN", ""),
+            climate_now=env_switch("MARSI_CLIMATE_NOW", True),
+            climate_summary=env_switch("MARSI_CLIMATE_SUMMARY", True),
         )
         if not 1 <= config.threads <= 64 or not 1 <= config.timeout <= 600:
             raise ValueError("CPU threads must be 1..64 and timeout must be 1..600 seconds")

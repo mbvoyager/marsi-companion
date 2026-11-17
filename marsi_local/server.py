@@ -87,6 +87,7 @@ class Server(ThreadingHTTPServer):
         else:
             self.climate = climate
             self.climate_admin = admin
+            self.companion.tools.climate = climate
 
     def server_close(self):
         if self.shared is None:
