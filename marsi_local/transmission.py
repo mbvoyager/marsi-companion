@@ -5,6 +5,14 @@ from math import ceil
 from statistics import median
 
 
+REPLY_STREAM_TYPE = "application/x-ndjson"
+RESEARCH_PROGRESS = {
+    "searching": "[NOOSPHERE] Searching the Noosphere ...",
+    "reading": "[NOOSPHERE] Reading a source ...",
+    "answering": "[NOOSPHERE] Preparing the answer ...",
+}
+
+
 class ResponseTimes:
     """Learn from the last five completed requests of each kind, in RAM only."""
     DEFAULTS = {"chat": 45, "chat-voice": 60, "voice": 75, "voice-silent": 60,
@@ -28,6 +36,7 @@ class Transmission:
     at: str
     started: float
     estimate: float
+    phase: str = ""
 
     def progress(self, now):
         elapsed = max(0, now - self.started)
@@ -38,4 +47,5 @@ class Transmission:
         timing = (f"{elapsed:.0f}s elapsed / ~{ceil(self.estimate - elapsed)}s remaining"
                   if elapsed < self.estimate else
                   f"{elapsed:.0f}s elapsed / a longer thought")
-        return f"[COGITATOR / ESTIMATE]\n[{bar}] ~{percent}%\n{timing}\n\n"
+        heading = RESEARCH_PROGRESS.get(self.phase, "[COGITATOR / ESTIMATE]")
+        return f"{heading}\n[{bar}] ~{percent}%\n{timing}\n\n"

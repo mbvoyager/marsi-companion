@@ -11,6 +11,9 @@ import urllib.request
 from .config import load_env, validate_url
 from .core import clean_text, session_name
 from .speech import MAX_AUDIO_BYTES
+from .transmission import REPLY_STREAM_TYPE, RESEARCH_PROGRESS
+
+MAX_REPLY = 12_000_000
 
 
 class ClientError(Exception):
@@ -24,6 +27,7 @@ class Client:
         self.url, self.token = validate_url(url), token
         self.session, self.timeout = session_name(session), timeout
         self.http = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        self.on_progress = None
 
     @classmethod
     def from_env(cls):
@@ -32,6 +36,8 @@ class Client:
 
     def request(self, path: str, payload=None, *, method="POST", audio: bytes | None = None):
         headers = {"Authorization": "Bearer " + self.token, "X-Marsi-Session": self.session}
+        if self.on_progress and path.split("?", 1)[0] in ("/v1/chat", "/v1/voice"):
+            headers["Accept"] = REPLY_STREAM_TYPE
         if audio is not None:
             body, headers["Content-Type"] = audio, "audio/wav"
         elif payload is not None:
@@ -43,8 +49,10 @@ class Client:
         timeout = min(self.timeout, 5) if quick_request else self.timeout
         try:
             with self.http.open(request, timeout=timeout) as response:
-                raw = response.read(12_000_001)
-            if len(raw) > 12_000_000:
+                if self.on_progress and response.headers.get_content_type() == REPLY_STREAM_TYPE:
+                    return self.read_reply(response)
+                raw = response.read(MAX_REPLY + 1)
+            if len(raw) > MAX_REPLY:
                 raise ClientError("Marsi sent a reply that was too large.")
             result = json.loads(raw)
             if not isinstance(result, dict):
@@ -58,6 +66,23 @@ class Client:
             raise ClientError(str(detail), status=error.code) from error
         except (OSError, ValueError) as error:
             raise ClientError("The tiny forge is unreachable. Check the server, address and Wi-Fi.") from error
+
+    def read_reply(self, response):
+        for _ in range(8):
+            raw = response.readline(MAX_REPLY + 1)
+            if not raw or len(raw) > MAX_REPLY:
+                break
+            event = json.loads(raw)
+            if not isinstance(event, dict):
+                break
+            if isinstance(event.get("reply"), dict):
+                return event["reply"]
+            if isinstance(event.get("error"), str):
+                raise ClientError(event["error"], event.get("status"))
+            phase = event.get("progress")
+            if isinstance(phase, str) and phase in RESEARCH_PROGRESS:
+                self.on_progress(phase)
+        raise ClientError("The research reply was interrupted.")
 
     def chat(self, text: str, speak=False):
         return self.request("/v1/chat", {"text": clean_text(text), "session_id": self.session, "want_audio": speak})
@@ -144,7 +169,9 @@ def command(text):
             "help": "help", "forget": "forget"}.get(name)
 
 
-HELP = "art | sermon | bless | history | /remember TEXT | /notes | /forget | exit\nDisplay: F8 = Talk/Finish; Escape = window; Ctrl+Q = exit."
+HELP = ("art | sermon | bless | history | /remember TEXT | /notes | /forget | exit\n"
+        "/recherche QUESTION (voice: Marsi research, QUESTION)\n"
+        "Display: F8 = Talk/Finish; Escape = window; Ctrl+Q = exit.")
 
 
 def main():
@@ -153,6 +180,7 @@ def main():
     args = parser.parse_args()
     load_env(args.env)
     client = Client.from_env()
+    client.on_progress = lambda phase: print(RESEARCH_PROGRESS[phase], flush=True)
     print("MARSI // ARCHIVUM MARTIS\n" + HELP)
     try:
         while True:
@@ -179,6 +207,8 @@ def main():
                     task = {"art": client.art, "sermon": client.sermon, "ritual": client.ritual}.get(action)
                     result = task() if task else client.chat(text)
                     print("Marsi > " + result["text"])
+                    for source in result.get("sources", []):
+                        print(f"  {source['title']} ({source['domain']})")
             except (ClientError, ValueError) as error:
                 print(str(error))
     except (KeyboardInterrupt, EOFError):

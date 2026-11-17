@@ -38,8 +38,9 @@ def validate_wav(data: bytes) -> None:
 
 
 class Speech:
-    def __init__(self, config: ServerConfig):
+    def __init__(self, config: ServerConfig, *, download_whisper=False):
         self.config = config
+        self.download_whisper = download_whisper
         self.whisper = None
         self.voice = None
 
@@ -50,7 +51,7 @@ class Speech:
                 self.whisper = WhisperModel(
                     self.config.whisper_model, device="cpu", compute_type="int8",
                     cpu_threads=self.config.threads, num_workers=1,
-                    download_root=str(ROOT / "models" / "whisper"),
+                    download_root=str(ROOT / "models" / "whisper"), local_files_only=not self.download_whisper,
                 )
             except Exception as error:
                 # Exception messages can contain private data; log only their type.
@@ -143,7 +144,7 @@ def main():
     if args.text is not None and not args.synthesize:
         parser.error("--text requires --synthesize")
     load_env(args.env)
-    speech = Speech(ServerConfig.from_env())
+    speech = Speech(ServerConfig.from_env(), download_whisper=True)
     # Diagnostic failures retain their chained traceback in this explicitly
     # invoked terminal check. Routine server logs contain no exception text.
     if args.check_recognition:

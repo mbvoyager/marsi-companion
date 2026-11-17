@@ -21,6 +21,7 @@ from .climate import ClimateConfig, ClimateSubscriber
 from .climate_admin import ClimateAdmin
 from .core import Companion, ServiceError, clean_text, ritual, session_name
 from .speech import MAX_AUDIO_BYTES, Speech, VOICE_CHECK_TEXT
+from .transmission import REPLY_STREAM_TYPE
 
 LOG = logging.getLogger("marsi.local")
 CLIMATE_HEARTBEAT_SECONDS = 15
@@ -228,6 +229,32 @@ class Handler(BaseHTTPRequestHandler):
         return payload
 
     def dispatch(self, method: str):
+        streaming_reply = False
+
+        def line(event):
+            self.wfile.write(json.dumps(event, ensure_ascii=False).encode("utf-8") + b"\n")
+            self.wfile.flush()
+
+        def progress(phase):
+            nonlocal streaming_reply
+            if self.headers.get("Accept") != REPLY_STREAM_TYPE:
+                return
+            if not streaming_reply:
+                self.close_connection = True
+                self.send_response(200)
+                self.send_header("Content-Type", REPLY_STREAM_TYPE)
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Connection", "close")
+                self.end_headers()
+                streaming_reply = True
+            line({"progress": phase})
+
+        def respond(status, payload):
+            if streaming_reply:
+                line({"reply": payload} if status == 200 else {**payload, "status": status})
+            else:
+                self.respond(status, payload)
+
         try:
             path = urlsplit(self.path).path
             app = self.server.companion
@@ -295,10 +322,10 @@ class Handler(BaseHTTPRequestHandler):
                     return self.respond(200, {"notes": app.memory.notes(session)})
                 if path == "/v1/voice":
                     text = clean_text(app.speech.transcribe(recording))
-                    result = app.chat(session, text)
+                    result = app.chat(session, text, spoken=True, progress=progress)
                     result["heard"] = text
                 elif path == "/v1/chat":
-                    result = app.chat(session, clean_text(payload.get("text")))
+                    result = app.chat(session, clean_text(payload.get("text")), progress=progress)
                 elif path == "/v1/voice-check":
                     # Diagnose actual speech without Qwen or a saved conversation.
                     text = clean_text(payload.get("text", VOICE_CHECK_TEXT), 300)
@@ -324,16 +351,16 @@ class Handler(BaseHTTPRequestHandler):
                         attach_audio(result, app.speech.synthesize(result.get("spoken_text") or result["text"]))
                     except ServiceError as error:
                         result["voice_error"] = str(error)
-                self.respond(200, result)
+                respond(200, result)
         except ServiceError as error:
-            self.respond(error.status, {"error": str(error)})
+            respond(error.status, {"error": str(error)})
         except ValueError as error:
-            self.respond(400, {"error": str(error)})
+            respond(400, {"error": str(error)})
         except (socket.timeout, ConnectionError):
             self.close_connection = True
         except Exception as error:
             LOG.error("Marsi request failed (%s)", type(error).__name__)
-            self.respond(500, {"error": "Internal error. Check the server console."})
+            respond(500, {"error": "Internal error. Check the server console."})
 
     def do_GET(self):
         self.dispatch("GET")

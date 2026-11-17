@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import ipaddress
 import os
 from pathlib import Path
 import re
@@ -42,6 +43,25 @@ def env_switch(name: str, default: bool) -> bool:
     return value.lower() == "true"
 
 
+LAN_NETWORKS = tuple(ipaddress.ip_network(prefix) for prefix in
+                     ("127.0.0.0/8", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "::1/128", "fc00::/7"))
+
+
+def local_ollama_url(value: str) -> str:
+    url = validate_url(value)
+    parsed = urlsplit(url)
+    if parsed.hostname == "localhost":
+        # Resolve localhost explicitly, independent of the system DNS search path.
+        return f"{parsed.scheme}://127.0.0.1" + (f":{parsed.port}" if parsed.port else "")
+    try:
+        address = ipaddress.ip_address(parsed.hostname)
+    except ValueError:
+        address = None
+    if address is None or not any(address in network for network in LAN_NETWORKS):
+        raise ValueError("MARSI_OLLAMA_URL needs localhost or a private LAN IP address")
+    return url
+
+
 @dataclass(frozen=True)
 class ServerConfig:
     ollama_url: str = "http://127.0.0.1:11434"
@@ -61,18 +81,26 @@ class ServerConfig:
     admin_token: str = ""
     climate_now: bool = True
     climate_summary: bool = True
+    web_search: bool = False
+    web_fetch: bool = True
+    searxng_port: int = 8888
+    tool_calling: bool = False
 
     def __post_init__(self):
         if self.admin_token and (len(self.token) < 32 or self.admin_token == self.token
                                  or not re.fullmatch(r"[A-Za-z0-9_-]{32,128}", self.admin_token)):
             raise ValueError("MARSI_ADMIN_TOKEN needs 32..128 URL-safe characters and a distinct MARSI_TOKEN")
+        if not 1 <= self.searxng_port <= 65535:
+            raise ValueError("MARSI_SEARXNG_PORT must be 1..65535")
+        if self.model.lower().endswith((":cloud", "-cloud")):
+            raise ValueError("MARSI_MODEL requires an installed local Ollama model")
 
     @classmethod
     def from_env(cls, demo: bool = False) -> ServerConfig:
         voice = os.getenv("MARSI_PIPER_MODEL", "")
         climate = os.getenv("MARSI_CLIMATE_CONFIG", "")
         config = cls(
-            ollama_url=validate_url(os.getenv("MARSI_OLLAMA_URL", cls.ollama_url)),
+            ollama_url=local_ollama_url(os.getenv("MARSI_OLLAMA_URL", cls.ollama_url)),
             model=os.getenv("MARSI_MODEL", cls.model),
             token=os.getenv("MARSI_TOKEN", ""),
             database=Path(os.getenv("MARSI_DATABASE", str(cls.database))).expanduser(),
@@ -91,6 +119,10 @@ class ServerConfig:
             admin_token=os.getenv("MARSI_ADMIN_TOKEN", ""),
             climate_now=env_switch("MARSI_CLIMATE_NOW", True),
             climate_summary=env_switch("MARSI_CLIMATE_SUMMARY", True),
+            web_search=env_switch("MARSI_WEB_SEARCH", False),
+            web_fetch=env_switch("MARSI_WEB_FETCH", True),
+            searxng_port=int(os.getenv("MARSI_SEARXNG_PORT", "8888")),
+            tool_calling=env_switch("MARSI_TOOL_CALLING", False),
         )
         if not 1 <= config.threads <= 64 or not 1 <= config.timeout <= 600:
             raise ValueError("CPU threads must be 1..64 and timeout must be 1..600 seconds")

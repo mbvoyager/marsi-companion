@@ -27,7 +27,7 @@ RANGE_PATTERNS = (
     ("7d", r"\b7\s*(?:d|days?|tage[n]?)\b"),
 )
 VALUE_IN_REPLY = re.compile(r"(?<![\d.,])-?\d+(?:[.,]\d+)?\s*(?:°\s*[CF]|degrees?\s+(?:Celsius|Fahrenheit)|%)", re.I)
-MAX_SENSORS_IN_CONTEXT = 8
+MAX_CONTEXT_BYTES = 3000
 
 
 @dataclass(frozen=True)
@@ -65,8 +65,7 @@ def _number(value):
 
 
 def _selected_sensors(data, intent):
-    sensors = [sensor for sensor in data["sensors"] if intent.location is None or sensor["location"] == intent.location]
-    return sensors[:MAX_SENSORS_IN_CONTEXT], len(sensors)
+    return [sensor for sensor in data["sensors"] if intent.location is None or sensor["location"] == intent.location]
 
 
 def _sensor_label(sensor):
@@ -81,6 +80,10 @@ class ClimateReading:
     certain_reply: bool = True
     required_values: frozenset[str] = frozenset()
 
+    @property
+    def direct_reply(self):
+        return self.certain_reply or len(self.text.encode("utf-8")) > MAX_CONTEXT_BYTES
+
     def matches(self, reply):
         actual = frozenset(re.sub(r"\s+", "", match[0].lower().replace(",", "."))
                            .replace("degreescelsius", "°c").replace("degreecelsius", "°c")
@@ -89,7 +92,7 @@ class ClimateReading:
 
 
 def format_now(data, intent=ClimateIntent()):
-    sensors, count = _selected_sensors(data, intent)
+    sensors = _selected_sensors(data, intent)
     if not sensors:
         scope = f" {intent.location}" if intent.location else ""
         return ClimateReading(f"I have no visible{scope} climate sensor.")
@@ -116,13 +119,11 @@ def format_now(data, intent=ClimateIntent()):
             fresh = fresh and not stale and connection == "connected"
             values.add(value + ("°c" if metric == "temperature" else "%"))
         lines.append(f"{_sensor_label(sensor)}, link {connection}, last measurement {newest}. " + ", ".join(parts) + ".")
-    if count > len(sensors):
-        lines.append(f"Showing {len(sensors)} of {count} visible sensors.")
     return ClimateReading("\n".join(lines), certain_reply=not fresh, required_values=frozenset(values))
 
 
 def format_summary(data, intent):
-    sensors, count = _selected_sensors(data, intent)
+    sensors = _selected_sensors(data, intent)
     if not sensors:
         scope = f" {intent.location}" if intent.location else ""
         return ClimateReading(f"I have no visible{scope} climate sensor for that period.")
@@ -143,8 +144,6 @@ def format_summary(data, intent):
                 complete = False
             parts.append(f"{label} {sample}")
         lines.append(f"{_sensor_label(sensor)}. " + ", ".join(parts) + ".")
-    if count > len(sensors):
-        lines.append(f"Showing {len(sensors)} of {count} visible sensors.")
     return ClimateReading("\n".join(lines), certain_reply=not complete, required_values=frozenset(required))
 
 

@@ -10,7 +10,7 @@ from unittest.mock import Mock
 from marsi_local.climate import ClimateArchive, ClimateConfig, HOUR_MS, Sensor
 from marsi_local.config import ServerConfig
 from marsi_local.core import Companion
-from marsi_local.reading_tools import ClimateIntent, climate_intent
+from marsi_local.reading_tools import ClimateIntent, climate_intent, format_now
 
 
 class ClimateReadingTests(unittest.TestCase):
@@ -96,3 +96,16 @@ class ClimateReadingTests(unittest.TestCase):
         self.assertIn("-6 °C / 12 °C / 3 °C", readout.text)
         with self.assertRaisesRegex(ValueError, "3h, 24h or 7d"):
             self.app.tools.climate_summary("30d")
+
+    def test_large_registry_keeps_every_sensor_in_direct_report(self):
+        data = self.snapshot()
+        data["sensors"] = [{"name": f"Probe {i}", "location": "indoor", "connection": "connected",
+                            "last_measurement_ms": self.now,
+                            "readings": {"temperature": {"observed_ms": self.now, "value": 20},
+                                         "humidity": {"observed_ms": self.now, "value": 50}}}
+                           for i in range(30)]
+        report = format_now(data)
+        self.assertTrue(report.direct_reply)
+        self.assertFalse(report.certain_reply)
+        self.assertEqual(len(report.text.splitlines()), 30)
+        self.assertIn("Probe 29", report.text)
