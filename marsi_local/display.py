@@ -11,7 +11,7 @@ import threading
 import time
 
 from .ambient import Ambient, quiet_hour
-from .client import ClientError, HELP, command
+from .client import Client, ClientError, HELP, command
 from .climate_view import ClimateView
 from .liturgy import BLACK, GREEN, RED, without_emoji
 from .electoo import BONE, BRASS, Electoo
@@ -20,7 +20,7 @@ from .config import ROOT
 from .audio import CHECK_COMMAND
 from .audio_transfer import reply_audio
 from .pointer import install_reticle
-from .transmission import ResponseTimes, Transmission
+from .transmission import RESEARCH_PROGRESS, ResponseTimes, Transmission
 
 
 RETRY_DELAYS = (1, 2, 4, 8)
@@ -33,6 +33,8 @@ class Display:
         self.tk, self.root, self.client = tk, root, client
         self.mono = tkfont.nametofont("TkFixedFont").actual("family")
         self.events = queue.Queue()
+        if isinstance(client, Client):
+            client.on_progress = lambda phase: self.events.put(("research_progress", phase))
         self.busy = self.recording = self.closed = self.polling = False
         self.stop = threading.Event()
         self.mode, self.animation = "idle", "happy"
@@ -627,6 +629,9 @@ class Display:
                     self.reply.configure(state="disabled")
                 if result.get("entries"):
                     self.receive_entries(result["entries"])
+                elif result.get("source") == "research":
+                    sources = "\n".join(f"- {source['title']} ({source['domain']})" for source in result["sources"])
+                    self.show_text("[INTERNET RESEARCH]\n" + result["text"] + "\n\nSOURCES\n" + sources, "marsi")
                 elif result.get("source") != "playback":
                     self.show_text(result["text"])
                 self.status.set("[HEARD] " + result["heard"][:80] if result.get("heard") else "[RECEIVED] Transmission sealed.")
@@ -634,6 +639,9 @@ class Display:
                     self.status.set("[VOX] " + result["voice_error"])
             elif kind == "archive":
                 self.receive_archive(result)
+            elif kind == "research_progress" and self.pending is not None:
+                self.pending.phase = result
+                self.status.set(RESEARCH_PROGRESS[result])
             elif kind == "telemetry":
                 self.readings = result
             elif kind == "local":

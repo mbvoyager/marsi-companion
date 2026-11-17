@@ -133,6 +133,23 @@ class DisplayTransmissionTests(unittest.TestCase):
         self.assertNotIn("ESTIMATE", self.content())
         self.assertEqual(self.content().count(self.question), 1)
 
+    def test_research_phases_update_the_progress_and_show_sources(self):
+        self.result = {"text": "Rain comes from clouds.", "source": "research",
+                       "sources": [{"title": "An atlas", "domain": "weather.example"}]}
+        release = self.delayed_send()
+        self.display.events.put(("research_progress", "searching"))
+        self.display.tick()
+        self.assertIn("Searching the Noosphere", self.content())
+        self.display.events.put(("research_progress", "reading"))
+        self.display.tick()
+        self.assertIn("Reading a source", self.display.status.get())
+        release.set()
+        self.pump_until(lambda: not self.display.busy)
+        self.assertIn("[INTERNET RESEARCH]", self.content())
+        self.assertIn("An atlas (weather.example)", self.content())
+        self.assertNotIn("Reading a source", self.content())
+        self.assertFalse(self.display.entries)
+
     def test_progress_finishes_when_the_reply_arrives_before_audio_playback_finishes(self):
         self.display.begin_transmission(self.question, "chat-voice")
         self.display.set_busy(True)

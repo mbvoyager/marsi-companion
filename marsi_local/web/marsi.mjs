@@ -9,11 +9,17 @@ const player = $("reply-audio");
 const mic = canRecord();
 const sessionKey = "marsi-web-session";
 const viewKey = "marsi-web-view";
-const HELP = "art | sermon | bless | history | /remember TEXT | /notes | /forget | exit\nF8 or TALK opens the vox. F8 or FINISH seals the recording.";
+const HELP = "art | sermon | bless | history | /remember TEXT | /notes | /forget | exit\n/recherche QUESTION (voice: Marsi research, QUESTION)\nF8 or TALK opens the vox. F8 or FINISH seals the recording.";
+const REPLY_STREAM = "application/x-ndjson";
+const RESEARCH_PROGRESS = {
+  searching: "[ NOOSPHERE ] Searching the Noosphere ...",
+  reading: "[ NOOSPHERE ] Reading a source ...",
+  answering: "[ NOOSPHERE ] Preparing the answer ...",
+};
 const stampFormat = new Intl.DateTimeFormat("en-GB", {dateStyle: "short", timeStyle: "short"});
 const state = {generation: 0, journalEpoch: 0, unlocked: false, session: "pi", token: "", tab: "chat", entries: new Map()};
 
-async function request(path, {method = "GET", body, signal, headers, stream = false} = {}) {
+async function request(path, {method = "GET", body, signal, headers, stream = false, onProgress} = {}) {
   const parent = signal || state.connection?.signal;
   const deadline = stream ? null : new AbortController();
   const abort = () => deadline?.abort();
@@ -27,6 +33,7 @@ async function request(path, {method = "GET", body, signal, headers, stream = fa
     method, cache: "no-store", redirect: "error", signal: deadline?.signal || parent,
     headers: {Authorization: `Bearer ${state.token}`, "X-Marsi-Session": state.session, ...headers},
   };
+  if (onProgress) options.headers.Accept = REPLY_STREAM;
   if (body instanceof Blob) {
     options.body = body;
     options.headers["Content-Type"] = "audio/wav";
@@ -45,10 +52,42 @@ async function request(path, {method = "GET", body, signal, headers, stream = fa
       error.status = response.status;
       throw error;
     }
+    if (onProgress && response.headers.get("content-type")?.startsWith(REPLY_STREAM)) {
+      return await readReply(response, onProgress);
+    }
     return stream ? response : await response.json();
   } finally {
     clearTimeout(timer);
     parent?.removeEventListener("abort", abort);
+  }
+}
+
+async function readReply(response, onProgress) {
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "", total = 0;
+  try {
+    while (true) {
+      const {value, done} = await reader.read();
+      if (done) throw new Error("The research reply was interrupted.");
+      total += value.byteLength;
+      if (total > 12_000_000) throw new Error("The research reply was too large.");
+      buffer += decoder.decode(value, {stream: true});
+      let boundary;
+      while ((boundary = buffer.indexOf("\n")) >= 0) {
+        const event = JSON.parse(buffer.slice(0, boundary));
+        buffer = buffer.slice(boundary + 1);
+        if (event.reply && typeof event.reply === "object") return event.reply;
+        if (event.error) {
+          const error = new Error(event.error);
+          error.status = event.status;
+          throw error;
+        }
+        if (Object.hasOwn(RESEARCH_PROGRESS, event.progress)) onProgress(RESEARCH_PROGRESS[event.progress]);
+      }
+    }
+  } finally {
+    await reader.cancel().catch(() => {});
   }
 }
 
@@ -333,7 +372,11 @@ async function runTask(action, {label, human = false, forgot = false} = {}) {
   if (label) beginPending(label, human);
   notice("chat-status", "[ COGITATOR ] Consulting the little archive ...");
   try {
-    const result = await action();
+    const result = await action(phase => {
+      if (generation !== state.generation) return;
+      if (state.pending) state.pending.node.firstChild.textContent = phase;
+      notice("chat-status", phase);
+    });
     if (generation !== state.generation) return;
     endPending(true);
     if (forgot) {
@@ -344,7 +387,10 @@ async function runTask(action, {label, human = false, forgot = false} = {}) {
       showWords("The archive has been cleared for this session.");
     } else if (result.entries?.length) addEntries(result.entries, {scroll: true});
     else if (result.notes) showWords("Saved notes\n" + (result.notes.join("\n") || "[ EMPTY ]"));
-    else if (result.text && result.source !== "playback") showWords(result.text, "marsi");
+    else if (result.source === "research") {
+      const sources = result.sources.map(source => "- " + source.title + " (" + source.domain + ")");
+      showWords("[ INTERNET RESEARCH ]\n" + result.text + "\n\nSOURCES\n" + sources.join("\n"), "marsi");
+    } else if (result.text && result.source !== "playback") showWords(result.text, "marsi");
     link("[ LINK ONLINE ]", "live");
     notice("chat-status", result.voice_error ? "[ VOX ] " + result.voice_error : "[ RECEIVED ] Transmission sealed.");
     try { await playReply(result, generation); }
@@ -365,8 +411,8 @@ async function runTask(action, {label, human = false, forgot = false} = {}) {
   }
 }
 
-function jsonTask(path, body = {}, method = "POST") {
-  return request(path, {method, body: {session_id: state.session, ...body}});
+function jsonTask(path, body = {}, method = "POST", onProgress) {
+  return request(path, {method, body: {session_id: state.session, ...body}, onProgress});
 }
 
 function speakEntry(id) {
@@ -391,7 +437,8 @@ function command(input) {
     const rite = action === "bless" ? "ritual" : action;
     runTask(() => jsonTask("/v1/" + rite, {want_audio: voice.checked}), {label: `Preparing a little ${rite} ...`});
   } else {
-    runTask(() => jsonTask("/v1/chat", {text: input, want_audio: voice.checked}), {label: input, human: true});
+    runTask(progress => jsonTask("/v1/chat", {text: input, want_audio: voice.checked}, "POST", progress),
+            {label: input, human: true});
   }
 }
 
@@ -425,7 +472,7 @@ async function talk() {
     if (generation !== state.generation) return;
     state.recorder = null;
     state.finishing = false;
-    await runTask(() => request(`/v1/voice?want_audio=${voice.checked}`, {method: "POST", body: wav}),
+    await runTask(onProgress => request(`/v1/voice?want_audio=${voice.checked}`, {method: "POST", body: wav, onProgress}),
                   {label: "Vox recording sealed. Awaiting transcription ..."});
   } catch (error) {
     if (generation === state.generation) {

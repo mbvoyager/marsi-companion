@@ -13,11 +13,16 @@ class Element {
   value = "";
   open = false;
 
+  get firstChild() { return this.children[0]; }
   addEventListener(name, listener) { this.listeners[name] = listener; }
   setAttribute(name, value) { this.attributes[name] = String(value); }
   replaceChildren(...children) { this.children = children; }
-  append(...children) { this.children.push(...children); }
+  append(...children) {
+    for (const child of children) child.parent = this;
+    this.children.push(...children);
+  }
   prepend(...children) { this.children.unshift(...children); }
+  remove() { this.parent.children = this.parent.children.filter(child => child !== this); }
   pause() {}
   reset() {}
   focus() {}
@@ -65,7 +70,7 @@ async function until(check) {
   assert.ok(check(), "The climate view did not reach the expected state");
 }
 
-test("login and page reload request the selected climate history after authentication", async t => {
+function captureIntervals(t) {
   const setInterval = globalThis.setInterval;
   const intervals = [];
   globalThis.setInterval = (...args) => {
@@ -77,7 +82,10 @@ test("login and page reload request the selected climate history after authentic
     globalThis.setInterval = setInterval;
     for (const timer of intervals) clearInterval(timer);
   });
+}
 
+test("login and page reload request the selected climate history after authentication", async t => {
+  captureIntervals(t);
   const paths = [];
   globalThis.fetch = async (path, {headers, signal}) => {
     paths.push(path);
@@ -131,6 +139,44 @@ test("login and page reload request the selected climate history after authentic
   assert.ok(paths[0].startsWith("/v1/journal"));
   assert.ok(paths.includes(historyRoute));
   reloaded.node("lock").listeners.click();
+});
+
+test("research command displays live phases and labels the final sources", async t => {
+  captureIntervals(t);
+  const {node} = mountPage();
+  let stream;
+  const encoder = new TextEncoder();
+  globalThis.fetch = async (path, options) => {
+    if (path.startsWith("/v1/journal")) return Response.json({entries: [], has_more: false});
+    if (path === "/v1/telemetry") return Response.json({});
+    assert.equal(path, "/v1/chat");
+    assert.equal(options.headers.Accept, "application/x-ndjson");
+    assert.equal(JSON.parse(options.body).text, "/recherche What is rain?");
+    return new Response(new ReadableStream({start(controller) { stream = controller; }}),
+                        {headers: {"Content-Type": "application/x-ndjson"}});
+  };
+  await import("../marsi_local/web/marsi.mjs?research-page");
+  t.after(() => node("lock").listeners.click());
+  node("token").value = "synthetic-token";
+  node("session").value = "pi";
+  node("gate-form").listeners.submit({preventDefault() {}});
+  await until(() => node("gate").hidden === true);
+  node("message").value = "/recherche What is rain?";
+  node("chat-form").listeners.submit({preventDefault() {}});
+  await until(() => stream);
+  stream.enqueue(encoder.encode('{"progress":"sear'));
+  stream.enqueue(encoder.encode('ching"}\n{"progress":"reading"}\n'));
+  await until(() => node("chat-status").textContent.includes("Reading a source"));
+  assert.ok(node("journal").children.some(article => article.firstChild.textContent.includes("Reading a source")));
+  stream.enqueue(encoder.encode(JSON.stringify({reply: {
+    source: "research", text: "Rain is liquid water.",
+    sources: [{title: "Weather atlas", domain: "example.org"}],
+  }}) + "\n"));
+  stream.close();
+  const words = () => node("journal").children.flatMap(article => article.children.map(child => child.textContent));
+  await until(() => words().some(text => text?.includes("Weather atlas (example.org)")));
+  assert.ok(words().some(text => text?.includes("[ INTERNET RESEARCH ]")));
+  assert.ok(!words().some(text => text?.includes("Reading a source")));
 });
 
 test("live refreshes leave a history request running and coalesce a follow-up", async t => {
