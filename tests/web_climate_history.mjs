@@ -151,7 +151,7 @@ test("research command displays live phases and labels the final sources", async
     if (path === "/v1/telemetry") return Response.json({});
     assert.equal(path, "/v1/chat");
     assert.equal(options.headers.Accept, "application/x-ndjson");
-    assert.equal(JSON.parse(options.body).text, "/recherche What is rain?");
+    assert.equal(JSON.parse(options.body).text, "/research What is rain?");
     return new Response(new ReadableStream({start(controller) { stream = controller; }}),
                         {headers: {"Content-Type": "application/x-ndjson"}});
   };
@@ -161,7 +161,11 @@ test("research command displays live phases and labels the final sources", async
   node("session").value = "pi";
   node("gate-form").listeners.submit({preventDefault() {}});
   await until(() => node("gate").hidden === true);
-  node("message").value = "/recherche What is rain?";
+  const words = () => node("journal").children.flatMap(article => article.children.map(child => child.textContent));
+  node("message").value = "help";
+  node("chat-form").listeners.submit({preventDefault() {}});
+  assert.ok(words().some(text => text?.includes("/research QUESTION")));
+  node("message").value = "/research What is rain?";
   node("chat-form").listeners.submit({preventDefault() {}});
   await until(() => stream);
   stream.enqueue(encoder.encode('{"progress":"sear'));
@@ -173,7 +177,6 @@ test("research command displays live phases and labels the final sources", async
     sources: [{title: "Weather atlas", domain: "example.org"}],
   }}) + "\n"));
   stream.close();
-  const words = () => node("journal").children.flatMap(article => article.children.map(child => child.textContent));
   await until(() => words().some(text => text?.includes("Weather atlas (example.org)")));
   assert.ok(words().some(text => text?.includes("[ INTERNET RESEARCH ]")));
   assert.ok(!words().some(text => text?.includes("Reading a source")));

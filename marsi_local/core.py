@@ -482,7 +482,7 @@ class Companion:
         if not self.config.web_search:
             return status("Internet research is disabled on this Marsi server.")
         if not query or len(query) > MAX_QUERY:
-            return status(f"Enter /recherche followed by a question of up to {MAX_QUERY} characters.")
+            return status(f"Enter /research followed by a question of up to {MAX_QUERY} characters.")
         if progress:
             progress("searching")
         try:

@@ -170,7 +170,7 @@ def command(text):
 
 
 HELP = ("art | sermon | bless | history | /remember TEXT | /notes | /forget | exit\n"
-        "/recherche QUESTION (voice: Marsi research, QUESTION)\n"
+        "/research QUESTION (voice: Marsi research, QUESTION)\n"
         "Display: F8 = Talk/Finish; Escape = window; Ctrl+Q = exit.")
 
 

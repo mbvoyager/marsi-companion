@@ -57,10 +57,9 @@ See [Ollama's tool protocol](https://docs.ollama.com/capabilities/tool-calling).
 
 ## Internet research
 
-Type `/recherche How do rain droplets form?` or `/research How do rain droplets
-form?`. To use the microphone, press Talk and say **“Marsi research, how do rain
-droplets form?”** The command is recognized in the Talk recording. Speech
-recognition is English.
+Type `/research How do rain droplets form?`. To use the microphone, press Talk
+and say **“Marsi research, how do rain droplets form?”** The command is
+recognized in the Talk recording. Speech recognition is English.
 
 The Pi and browser show live search, page-reading and answer-preparation phases
 when they occur. A research reply carries an **Internet Research** label and a
@@ -173,7 +172,7 @@ need an account. The local container is the simplest fit for this setup.
    systemctl --user is-active marsi-server
    ```
 
-   Expect `active`. In the browser, send the test query with `/recherche`. Check
+   Expect `active`. In the browser, send the test query with `/research`. Check
    for the phase and the final source labels. Update and restart the Pi client
    if it has older display code. Try the same command with the Pi's text input
    and microphone.

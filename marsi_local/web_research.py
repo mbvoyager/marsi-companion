@@ -30,7 +30,7 @@ _NETWORK_SLOTS = threading.BoundedSemaphore(2)
 _WEB_PORTS = {"http": 80, "https": 443}
 _IPV6_TRANSITIONS = tuple(ipaddress.ip_network(prefix) for prefix in
                           ("2002::/16", "2001::/32", "64:ff9b::/96", "64:ff9b:1::/48"))
-_TYPED = re.compile(r"^/(?:recherche|research)(?=\s|$)\s*", re.I)
+_TYPED = re.compile(r"^/(?:research|recherche)(?=\s|$)\s*", re.I)
 _SPOKEN = re.compile(r"^(?:marsi|marcy|marci)[\s,:.!?]+research(?=[\s,:.!?]|$)[\s,:.!?]*", re.I)
 _OVERRIDES = re.compile(
     r"\b(?:(?:ignore|disregard|forget|override)\b.{0,100}\b(?:instructions|rules|prompt)|"

@@ -9,7 +9,7 @@ const player = $("reply-audio");
 const mic = canRecord();
 const sessionKey = "marsi-web-session";
 const viewKey = "marsi-web-view";
-const HELP = "art | sermon | bless | history | /remember TEXT | /notes | /forget | exit\n/recherche QUESTION (voice: Marsi research, QUESTION)\nF8 or TALK opens the vox. F8 or FINISH seals the recording.";
+const HELP = "art | sermon | bless | history | /remember TEXT | /notes | /forget | exit\n/research QUESTION (voice: Marsi research, QUESTION)\nF8 or TALK opens the vox. F8 or FINISH seals the recording.";
 const REPLY_STREAM = "application/x-ndjson";
 const RESEARCH_PROGRESS = {
   searching: "[ NOOSPHERE ] Searching the Noosphere ...",
