@@ -22,6 +22,8 @@ built, understood and repaired.
 | `marsi_local/electoo.py` | Cached circuitry, skull effigy and moving signals |
 | `marsi_local/pointer.py`, `drawn_pointer.py`, `assets/` | Drawn X11 reticle, native fallback and shared bitmaps |
 | `marsi_local/core.py` | Ollama, durable journal, working context, notes and recall |
+| `marsi_local/reading_tools.py`, `model_tools.py` | Climate question router, archive excerpts and Ollama argument validation |
+| `marsi_local/web_research.py` | Explicit research commands, loopback search and checked HTTP GET retrieval |
 | `marsi_local/speech.py` | Optional Whisper/Piper loading and WAV validation |
 | `marsi_local/server.py` | Authenticated HTTP endpoints |
 | `marsi_local/client.py` | Shared terminal/Pi API client |
@@ -68,10 +70,12 @@ non-Linux development retains the cleaned temporary-directory fallback. Explicit
 `speech --synthesize PATH` diagnostics intentionally export a WAV. SQLite deletion
 removes records logically; it is not a forensic erase, and copies/backups remain.
 
-Memory provides continuity; it does not retrain Qwen or make Marsi self-learning.
-The model has no execution tools. Schedules and animations are ordinary application
-code, and generated text is never interpreted as a shell command. The only
-subprocess in the Pi app is the fixed `aplay` playback program.
+Memory provides continuity for Qwen. Read-only tools are server functions on a
+fixed whitelist. The optional Ollama protocol proposes an operation and Marsi
+validates its arguments before performing it. Explicit research uses separate
+context and stays out of the journal. See [tool settings and limits](tools.md).
+Schedules and animations are ordinary application code. The only subprocess in
+the Pi app is the fixed `aplay` playback program.
 
 ## API
 
@@ -82,7 +86,7 @@ use `Content-Type: application/json`. The browser page, its static assets and
 | Method / route | Input | Result |
 | --- | --- | --- |
 | `GET /health` | None | API process health and demo/local-llm mode |
-| `POST /v1/chat` | `text`, `session_id`, optional boolean `want_audio` | Reply text, animation, source, optional WAV as `audio_base64` |
+| `POST /v1/chat` | `text`, `session_id`, optional boolean `want_audio` | Reply text, animation, source, optional WAV as `audio_base64`. An explicit research reply includes `sources` |
 | `POST /v1/voice` | `audio/wav` bytes; `X-Marsi-Session` header | Transcript, reply, optional audio; `?want_audio=false` skips synthesis |
 | `POST /v1/ritual` | `session_id`, optional `want_audio` | Authored ritual, independent of private memory |
 | `POST /v1/art`, `POST /v1/sermon` | `session_id`, optional `want_audio` | Authored/procedural inscription, archived; speech excludes diagrams |
@@ -97,6 +101,15 @@ use `Content-Type: application/json`. The browser page, its static assets and
 | `GET /v1/memory?session_id=pi` | Session in query | Explicit notes |
 | `POST /v1/memory` | `session_id`, `text` | Add explicit note |
 | `DELETE /v1/session` | `session_id` | Clear that session's journal, context, notes and schedule |
+
+On `/v1/chat` and `/v1/voice`, opt into progress with
+`Accept: application/x-ndjson`. A research response can then send one JSON
+object per line, with `progress` values `searching`, `reading` and `answering`
+as applicable. It ends with `{"reply": {...}}` or an object with `error` and
+`status`. Ordinary chat and research responses without streaming remain JSON.
+Research replies use `source: "research"` and up to five
+`{title, url, domain}` objects in `sources`. A command with no usable search
+results uses `source: "research-status"`.
 
 Climate administration uses HTTPS and the regular bearer token plus
 `X-Marsi-Admin-Token`. The routes below all use the `/v1/climate/admin/` prefix.
@@ -153,6 +166,11 @@ forgetting, busy handling, WAV limits, speech failure behaviour and quiet hours.
 They also exercise journal migration and pagination, recall, numeric-only
 telemetry, persistent routine targets, missed mornings and daylight-saving changes.
 They do not benchmark real models. The script bot has its own separate test suite.
+The tool tests mock search, DNS and page requests. They cover private addresses
+and redirects, bounded downloads, isolated research prompts, malformed tool
+calls and the two-call limit. The browser and Tk smoke tests verify live research
+phases and source labels. For real model measurements use
+[`marsi_local.tool_check`](tools.md#measure-ollama-tool-choice).
 The climate tests archive two synthetic sensor reports, check their UTC timestamps
 in SQLite and read them after a fresh server instance starts. The browser tests
 exercise login, page reload, overlapping live updates and the preview dialog.
@@ -221,9 +239,6 @@ X11 libraries are unavailable. The test needs `libxtst6` for event generation.
    with an obvious microphone indicator and physical mute option.
 4. Improve archive retrieval and add a reviewable memory editor. Raster chibi art
    remains a separate optional image pipeline; current ASCII art needs no model.
-5. Add narrow weather/news integrations after choosing a location and source.
-   Read-only numeric hardware reporting already exists. Each future device-changing
-   action needs a deliberate interface and an explicit policy.
 
 ## Prompt for continuing on Ubuntu
 
