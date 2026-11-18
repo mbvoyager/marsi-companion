@@ -91,9 +91,10 @@ need an account. The local container is the simplest fit for this setup.
    `MARSI_SEARXNG_PORT`.
 
 2. Create the private configuration on a first installation. The configuration
-   enables JSON and uses the Brave web engine, whose search request is a GET.
+   enables JSON and uses the `duckduckgo web` engine. Its initial search and
+   result-data requests use GET.
    Its secret is generated and written locally. [SearXNG settings](https://docs.searxng.org/admin/settings/settings.html),
-   [Brave engine source](https://github.com/searxng/searxng/blob/master/searx/engines/brave.py).
+   [DuckDuckGo web engine source](https://github.com/searxng/searxng/blob/master/searx/engines/duckduckgo_web.py).
 
    ```bash
    mkdir -p "$HOME/marsi-search/config" "$HOME/marsi-search/cache"
@@ -105,7 +106,7 @@ need an account. The local container is the simplest fit for this setup.
    use_default_settings:
      engines:
        keep_only:
-         - brave
+         - duckduckgo web
    server:
      secret_key: "$(openssl rand -hex 32)"
      limiter: false
@@ -117,7 +118,7 @@ need an account. The local container is the simplest fit for this setup.
        - html
        - json
    engines:
-     - name: brave
+     - name: duckduckgo web
        disabled: false
    outgoing:
      request_timeout: 4.0
@@ -150,19 +151,54 @@ need an account. The local container is the simplest fit for this setup.
    `sudo docker stats --no-stream marsi-searxng`. For a startup failure, inspect
    `sudo docker logs --tail 60 marsi-searxng` before proceeding.
 
-4. Verify the search path and JSON format with a public test query. The command
+4. Verify the search path, result URLs and subject matter with a public test query. The command
    asks the configured upstream provider about rain. [SearXNG Search API](https://docs.searxng.org/dev/search_api.html)
 
    ```bash
-   curl -fsS --max-time 10 -G http://127.0.0.1:8888/search \
+   curl --noproxy '*' -fsS --max-time 10 -G http://127.0.0.1:8888/search \
      --data-urlencode 'q=How do rain droplets form?' \
-     --data-urlencode 'format=json' |
-     python3 -c 'import json,sys; d=json.load(sys.stdin); print(len(d["results"]), "results"); print(d.get("unresponsive_engines", []))'
+     --data-urlencode 'format=json' \
+     --data-urlencode 'categories=general' \
+     --data-urlencode 'safesearch=1' |
+   python3 -c '
+   import json
+   import sys
+   from urllib.parse import urlsplit
+
+   data = json.load(sys.stdin)
+   results = data["results"]
+   valid = [
+       hit for hit in results
+       if urlsplit(hit.get("url", "")).scheme in ("http", "https")
+       and urlsplit(hit.get("url", "")).hostname
+   ]
+   print("Query:", data.get("query"))
+   print("Results:", len(results))
+   print("Results with a web address:", len(valid))
+   print("Engine issues:", data.get("unresponsive_engines", []))
+   for hit in valid[:3]:
+       print("-", hit.get("title", ""), hit["url"])
+   '
    ```
 
-   Expect a positive result count. HTTP 403 calls for checking enabled formats.
-   If the count is zero, look at `unresponsive_engines` and the container log
-   for an upstream timeout or rate limit before enabling Marsi search.
+   Expect the full question, a positive result count and complete HTTP(S) URLs.
+   Read the displayed titles and check that they concern rain formation.
+   An empty `Engine issues` list describes reported service errors. Also check
+   relevance before enabling Marsi search.
+
+   During the 2026-11-18 setup, the Brave engine returned malformed
+   `http:///go/...` URLs. Bing returned unrelated results or an empty page,
+   including in a direct request from Ubuntu. A direct GET check of the
+   DuckDuckGo web route on the development machine returned eight topical
+   results. Use the check above to verify it from the Ubuntu installation.
+   For an existing configuration that selected Bing, open
+   `sudo nano ~/marsi-search/config/settings.yml` and replace the two
+   `bing` entries under `keep_only` and `name` with `duckduckgo web`.
+   Restart with `sudo docker restart marsi-searxng` and repeat the check.
+
+   For HTTP 403 check enabled formats. For zero results or irrelevant results,
+   inspect `sudo docker logs --tail 60 marsi-searxng` and the selected engine's
+   response before proceeding.
 
 5. Set `MARSI_WEB_SEARCH=true` in `~/marsi-companion/.env.server` and restart the
    user service.
