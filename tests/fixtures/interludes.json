@@ -1,0 +1,451 @@
+[
+  {
+    "version": 1,
+    "type": "auspex",
+    "seed": 42,
+    "duration": 15,
+    "data": {
+      "at": "2026-11-18T12:00:00+00:00",
+      "imperial_date": "0.880026.M42",
+      "sensors": [
+        {
+          "id": "indoor",
+          "name": "Forge",
+          "room": "",
+          "location": "indoor",
+          "connection": "connected",
+          "last_report_ms": null,
+          "temperature": 21.4,
+          "humidity": null,
+          "style": {
+            "color": "#ffb000",
+            "shape": "circle",
+            "dash": []
+          }
+        },
+        {
+          "id": "outdoor",
+          "name": "Exterior",
+          "room": "",
+          "location": "outdoor",
+          "connection": "lost",
+          "last_report_ms": null,
+          "temperature": null,
+          "humidity": null,
+          "style": {
+            "color": "#e5d9bd",
+            "shape": "diamond",
+            "dash": [
+              6,
+              3
+            ]
+          }
+        }
+      ],
+      "machines": {
+        "server": {
+          "cpu_percent": null,
+          "load1": 0.82,
+          "cpu_count": 4,
+          "ram_used_mb": 2900,
+          "ram_total_mb": 7100,
+          "disk_used_percent": null,
+          "uptime_seconds": 1468800,
+          "temperature_c": 54
+        },
+        "pi": {
+          "cpu_percent": null,
+          "load1": 0.82,
+          "cpu_count": 4,
+          "ram_used_mb": 2900,
+          "ram_total_mb": 7100,
+          "disk_used_percent": null,
+          "uptime_seconds": 1468800,
+          "temperature_c": 43
+        }
+      },
+      "services": {
+        "mqtt": "online",
+        "zigbee2mqtt": "online"
+      },
+      "thought": "A missing datum deserves a question, not an invented number."
+    }
+  },
+  {
+    "version": 1,
+    "type": "vox",
+    "seed": 42,
+    "duration": 15,
+    "data": {
+      "at": "2026-11-18T12:00:00+00:00",
+      "imperial_date": "0.880026.M42",
+      "sensors": [
+        {
+          "id": "indoor",
+          "name": "Forge",
+          "room": "",
+          "location": "indoor",
+          "connection": "connected",
+          "last_report_ms": null,
+          "temperature": 21.4,
+          "humidity": null,
+          "style": {
+            "color": "#ffb000",
+            "shape": "circle",
+            "dash": []
+          }
+        },
+        {
+          "id": "outdoor",
+          "name": "Exterior",
+          "room": "",
+          "location": "outdoor",
+          "connection": "lost",
+          "last_report_ms": null,
+          "temperature": null,
+          "humidity": null,
+          "style": {
+            "color": "#e5d9bd",
+            "shape": "diamond",
+            "dash": [
+              6,
+              3
+            ]
+          }
+        }
+      ],
+      "machines": {
+        "server": {
+          "cpu_percent": null,
+          "load1": 0.82,
+          "cpu_count": 4,
+          "ram_used_mb": 2900,
+          "ram_total_mb": 7100,
+          "disk_used_percent": null,
+          "uptime_seconds": 1468800,
+          "temperature_c": 54
+        },
+        "pi": {
+          "cpu_percent": null,
+          "load1": 0.82,
+          "cpu_count": 4,
+          "ram_used_mb": 2900,
+          "ram_total_mb": 7100,
+          "disk_used_percent": null,
+          "uptime_seconds": 1468800,
+          "temperature_c": 43
+        }
+      },
+      "services": {
+        "mqtt": "online",
+        "zigbee2mqtt": "online"
+      },
+      "thought": "A missing datum deserves a question, not an invented number.",
+      "origin": "MARS RELIQUARY",
+      "channel": "VERMILLION",
+      "lines": [
+        "AUSPEX REPORTS NO SIGNAL FROM Exterior.",
+        "ITS PLACE IN THE LEDGER REMAINS OPEN.",
+        "I HAVE ADDED A VERY SMALL PRAYER. ^^"
+      ],
+      "corrupted": true
+    }
+  },
+  {
+    "version": 1,
+    "type": "servitor",
+    "seed": 42,
+    "duration": 15,
+    "data": {
+      "at": "2026-11-18T12:00:00+00:00",
+      "imperial_date": "0.880026.M42",
+      "sensors": [
+        {
+          "id": "indoor",
+          "name": "Forge",
+          "room": "",
+          "location": "indoor",
+          "connection": "connected",
+          "last_report_ms": null,
+          "temperature": 21.4,
+          "humidity": null,
+          "style": {
+            "color": "#ffb000",
+            "shape": "circle",
+            "dash": []
+          }
+        },
+        {
+          "id": "outdoor",
+          "name": "Exterior",
+          "room": "",
+          "location": "outdoor",
+          "connection": "lost",
+          "last_report_ms": null,
+          "temperature": null,
+          "humidity": null,
+          "style": {
+            "color": "#e5d9bd",
+            "shape": "diamond",
+            "dash": [
+              6,
+              3
+            ]
+          }
+        }
+      ],
+      "machines": {
+        "server": {
+          "cpu_percent": null,
+          "load1": 0.82,
+          "cpu_count": 4,
+          "ram_used_mb": 2900,
+          "ram_total_mb": 7100,
+          "disk_used_percent": null,
+          "uptime_seconds": 1468800,
+          "temperature_c": 54
+        },
+        "pi": {
+          "cpu_percent": null,
+          "load1": 0.82,
+          "cpu_count": 4,
+          "ram_used_mb": 2900,
+          "ram_total_mb": 7100,
+          "disk_used_percent": null,
+          "uptime_seconds": 1468800,
+          "temperature_c": 43
+        }
+      },
+      "services": {
+        "mqtt": "online",
+        "zigbee2mqtt": "online"
+      },
+      "thought": "A missing datum deserves a question, not an invented number."
+    }
+  },
+  {
+    "version": 1,
+    "type": "hololith",
+    "seed": 42,
+    "duration": 15,
+    "data": {
+      "at": "2026-11-18T12:00:00+00:00",
+      "imperial_date": "0.880026.M42",
+      "sensors": [
+        {
+          "id": "indoor",
+          "name": "Forge",
+          "room": "",
+          "location": "indoor",
+          "connection": "connected",
+          "last_report_ms": null,
+          "temperature": 21.4,
+          "humidity": null,
+          "style": {
+            "color": "#ffb000",
+            "shape": "circle",
+            "dash": []
+          }
+        },
+        {
+          "id": "outdoor",
+          "name": "Exterior",
+          "room": "",
+          "location": "outdoor",
+          "connection": "lost",
+          "last_report_ms": null,
+          "temperature": null,
+          "humidity": null,
+          "style": {
+            "color": "#e5d9bd",
+            "shape": "diamond",
+            "dash": [
+              6,
+              3
+            ]
+          }
+        }
+      ],
+      "machines": {
+        "server": {
+          "cpu_percent": null,
+          "load1": 0.82,
+          "cpu_count": 4,
+          "ram_used_mb": 2900,
+          "ram_total_mb": 7100,
+          "disk_used_percent": null,
+          "uptime_seconds": 1468800,
+          "temperature_c": 54
+        },
+        "pi": {
+          "cpu_percent": null,
+          "load1": 0.82,
+          "cpu_count": 4,
+          "ram_used_mb": 2900,
+          "ram_total_mb": 7100,
+          "disk_used_percent": null,
+          "uptime_seconds": 1468800,
+          "temperature_c": 43
+        }
+      },
+      "services": {
+        "mqtt": "online",
+        "zigbee2mqtt": "online"
+      },
+      "thought": "A missing datum deserves a question, not an invented number.",
+      "model": "cog"
+    }
+  },
+  {
+    "version": 1,
+    "type": "codex",
+    "seed": 42,
+    "duration": 15,
+    "data": {
+      "at": "2026-11-18T12:00:00+00:00",
+      "imperial_date": "0.880026.M42",
+      "sensors": [
+        {
+          "id": "indoor",
+          "name": "Forge",
+          "room": "",
+          "location": "indoor",
+          "connection": "connected",
+          "last_report_ms": null,
+          "temperature": 21.4,
+          "humidity": null,
+          "style": {
+            "color": "#ffb000",
+            "shape": "circle",
+            "dash": []
+          }
+        },
+        {
+          "id": "outdoor",
+          "name": "Exterior",
+          "room": "",
+          "location": "outdoor",
+          "connection": "lost",
+          "last_report_ms": null,
+          "temperature": null,
+          "humidity": null,
+          "style": {
+            "color": "#e5d9bd",
+            "shape": "diamond",
+            "dash": [
+              6,
+              3
+            ]
+          }
+        }
+      ],
+      "machines": {
+        "server": {
+          "cpu_percent": null,
+          "load1": 0.82,
+          "cpu_count": 4,
+          "ram_used_mb": 2900,
+          "ram_total_mb": 7100,
+          "disk_used_percent": null,
+          "uptime_seconds": 1468800,
+          "temperature_c": 54
+        },
+        "pi": {
+          "cpu_percent": null,
+          "load1": 0.82,
+          "cpu_count": 4,
+          "ram_used_mb": 2900,
+          "ram_total_mb": 7100,
+          "disk_used_percent": null,
+          "uptime_seconds": 1468800,
+          "temperature_c": 43
+        }
+      },
+      "services": {
+        "mqtt": "online",
+        "zigbee2mqtt": "online"
+      },
+      "thought": "A missing datum deserves a question, not an invented number.",
+      "codex": {
+        "title": "Mechanicus and Mars",
+        "facts": [
+          "The Adeptus Mechanicus is a galaxy-spanning priesthood of cybernetic engineers headquartered on Mars.",
+          "Tech-Priests preserve, manufacture and maintain much of the Imperium's machinery and arsenal.",
+          "Mars-red robes are an iconic sign of Martian affiliation; other forge worlds have their own colours."
+        ]
+      }
+    }
+  },
+  {
+    "version": 1,
+    "type": "noosphere",
+    "seed": 42,
+    "duration": 15,
+    "data": {
+      "at": "2026-11-18T12:00:00+00:00",
+      "imperial_date": "0.880026.M42",
+      "sensors": [
+        {
+          "id": "indoor",
+          "name": "Forge",
+          "room": "",
+          "location": "indoor",
+          "connection": "connected",
+          "last_report_ms": null,
+          "temperature": 21.4,
+          "humidity": null,
+          "style": {
+            "color": "#ffb000",
+            "shape": "circle",
+            "dash": []
+          }
+        },
+        {
+          "id": "outdoor",
+          "name": "Exterior",
+          "room": "",
+          "location": "outdoor",
+          "connection": "lost",
+          "last_report_ms": null,
+          "temperature": null,
+          "humidity": null,
+          "style": {
+            "color": "#e5d9bd",
+            "shape": "diamond",
+            "dash": [
+              6,
+              3
+            ]
+          }
+        }
+      ],
+      "machines": {
+        "server": {
+          "cpu_percent": null,
+          "load1": 0.82,
+          "cpu_count": 4,
+          "ram_used_mb": 2900,
+          "ram_total_mb": 7100,
+          "disk_used_percent": null,
+          "uptime_seconds": 1468800,
+          "temperature_c": 54
+        },
+        "pi": {
+          "cpu_percent": null,
+          "load1": 0.82,
+          "cpu_count": 4,
+          "ram_used_mb": 2900,
+          "ram_total_mb": 7100,
+          "disk_used_percent": null,
+          "uptime_seconds": 1468800,
+          "temperature_c": 43
+        }
+      },
+      "services": {
+        "mqtt": "online",
+        "zigbee2mqtt": "online"
+      },
+      "thought": "A missing datum deserves a question, not an invented number."
+    }
+  }
+]

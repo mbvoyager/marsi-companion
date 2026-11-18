@@ -16,6 +16,8 @@ BLACK, PANEL, RED, GREEN = (COLORS[key] for key in ("black", "panel", "red", "gr
 BONE, BRASS, DIM, AMBER = (COLORS[key] for key in ("bone", "brass", "dim", "amber"))
 MUTED, FAULT = COLORS["muted"], COLORS["rust"]
 FPS = definition()["layout"]["fps"]
+TYPE = definition()["type"]
+LAYOUT = definition()["layout"]
 
 
 def css():

@@ -3,7 +3,8 @@ import json
 import unittest
 from unittest.mock import patch
 
-from marsi_local.interludes import TYPES, InterludeTimer, build_interlude
+from marsi_local.interludes import TYPES, InterludeTimer, build_interlude, chirp
+from marsi_local.speech import validate_wav
 from marsi_local.lore import Lore
 from marsi_local.client import Client, ClientError
 from tests import test_web as fixtures
@@ -23,6 +24,10 @@ def fixture():
 
 
 class InterludeTests(unittest.TestCase):
+    def test_optional_chirp_is_short_pcm_in_memory(self):
+        audio = chirp()
+        validate_wav(audio)
+        self.assertLess(len(audio), 7000)
     def test_all_scenes_are_small_deterministic_json_with_truthful_missing_data(self):
         for kind in TYPES:
             with self.subTest(kind=kind):

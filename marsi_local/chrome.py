@@ -1,6 +1,6 @@
 """Original, static cogitator ironwork. Redraw only when a panel changes size."""
 import math
-from .theme import AMBER, BLACK, BRASS, DIM, PANEL, sensor_style
+from .theme import AMBER, BLACK, BRASS, DIM, PANEL, TYPE, LAYOUT
 
 
 def cog(canvas, x, y, radius=5, color=BRASS):
@@ -36,7 +36,7 @@ class Chrome:
             return
         self.key = w, h
         c.delete("chrome")
-        cut = min(9, h/4)
+        cut = min(LAYOUT["cut"], h/4)
         coords = (cut, 1, w-cut, 1, w-1, cut, w-1, h-cut, w-cut, h-1,
                   cut, h-1, 1, h-cut, 1, cut)
         c.create_polygon(*coords, fill=BLACK, outline=DIM, tags="chrome")
@@ -44,4 +44,4 @@ class Chrome:
         for x in (6, w-6):
             c.create_rectangle(x-1, 5, x+1, 7, fill=BRASS, outline="", tags="chrome")
         c.create_text(14, h/2-1, anchor="w", text="++ " + self.title + " ++",
-                      fill=AMBER, font=(self.font, -13), tags="chrome")
+                      fill=AMBER, font=(self.font, -(TYPE["body"] if w < 640 else TYPE["title"])), tags="chrome")

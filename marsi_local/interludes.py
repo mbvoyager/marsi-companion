@@ -4,6 +4,9 @@ from datetime import datetime, timezone
 import logging
 import math
 import random
+import io
+import struct
+import wave
 
 from .ambient import Ambient, quiet_hour
 from .telemetry import FIELDS, numeric_readings
@@ -21,6 +24,21 @@ THOUGHTS = (
     "The sacred manual has acquired another useful annotation.",
     "A quiet sensor is not necessarily a broken sensor.",
 )
+
+
+def chirp():
+    """A short optional servitor chirp, generated and held entirely in RAM."""
+    rate = 16000
+    frames = bytearray()
+    for i in range(int(rate*.18)):
+        t = i/rate
+        envelope = min(1,t/.015,(.18-t)/.025)
+        frequency = 740 if t < .09 else 990
+        frames.extend(struct.pack("<h",int(2000*envelope*math.sin(math.tau*frequency*t))))
+    buffer = io.BytesIO()
+    with wave.open(buffer,"wb") as audio:
+        audio.setnchannels(1); audio.setsampwidth(2); audio.setframerate(rate); audio.writeframes(frames)
+    return buffer.getvalue()
 
 
 def climate_context(climate, now=None):
@@ -43,7 +61,7 @@ def climate_context(climate, now=None):
                        "connection": sensor.get("connection", "unknown"),
                        "last_report_ms": sensor.get("last_report_ms"),
                        "temperature": fresh("temperature"), "humidity": fresh("humidity"),
-                       "style": sensor_style(sensor, index)})
+                       "style": sensor.get("style") or sensor_style(sensor, index)})
     return result
 
 

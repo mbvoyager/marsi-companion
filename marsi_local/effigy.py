@@ -5,7 +5,7 @@ BLACK, RED, GREEN = "#090708", "#b34d43", "#9fbf97"
 BONE, BRASS, DIM = "#d8cbb0", "#a68b5c", "#4b332f"
 
 class Effigy:
-    def __init__(self, canvas, font, kind="band"):
+    def __init__(self, canvas, font, kind="effigy"):
             self.canvas, self.font, self.kind = canvas, font, kind
             self.key = None
             self.paths = []
@@ -203,3 +203,4 @@ class Effigy:
             x, y = self.along(path, (now*speed + i*.137) % 1)
             x, y = x+self.figure_offset[0], y+self.figure_offset[1]
             c.coords(item, x-1.5, y-1.5, x+1.5, y+1.5)
+            c.itemconfigure(item, fill=GREEN if mode in ("listening", "speaking") else BONE)
