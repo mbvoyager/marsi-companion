@@ -77,6 +77,8 @@ class ServerConfig:
     observances: bool = True
     schedule_session: str = "pi"
     morning_hour: int = 7
+    quiet_start: int = 22
+    quiet_end: int = 8
     climate_config: Path | None = None
     admin_token: str = ""
     climate_now: bool = True
@@ -115,6 +117,8 @@ class ServerConfig:
             observances=os.getenv("MARSI_OBSERVANCES", "true").lower() == "true",
             schedule_session=os.getenv("MARSI_COMPANION_SESSION", "pi"),
             morning_hour=int(os.getenv("MARSI_MORNING_HOUR", "7")),
+            quiet_start=int(os.getenv("MARSI_QUIET_START", "22")),
+            quiet_end=int(os.getenv("MARSI_QUIET_END", "8")),
             climate_config=Path(climate).expanduser() if climate else None,
             admin_token=os.getenv("MARSI_ADMIN_TOKEN", ""),
             climate_now=env_switch("MARSI_CLIMATE_NOW", True),
@@ -128,6 +132,8 @@ class ServerConfig:
             raise ValueError("CPU threads must be 1..64 and timeout must be 1..600 seconds")
         if not 0 <= config.morning_hour <= 23 or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", config.schedule_session):
             raise ValueError("Morning hour must be 0..23 and companion session must be a valid session name")
+        if not 0 <= config.quiet_start <= 23 or not 0 <= config.quiet_end <= 23:
+            raise ValueError("Quiet hours must be 0..23")
         return config
 
 

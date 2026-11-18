@@ -89,50 +89,5 @@ def morning(readings, now):
             "source": "morning", "animation": "wave"}
 
 
-class Observances:
-    """Persist calendar state and its journal entry together in one transaction."""
-    def __init__(self, memory, session="pi", morning_hour=7):
-        self.memory, self.session, self.morning_hour = memory, session, morning_hour
 
-    def run(self, now, readings, enabled=True):
-        if not enabled:
-            return []
-        # Store local wall-clock targets so a daylight-saving offset change
-        # does not shift or skip the morning's configured hour.
-        now = now.replace(tzinfo=None)
-        today = now.date().isoformat()
-        created = []
-        with self.memory.connect() as db:
-            for kind in ("art", "sermon", "morning"):
-                row = db.execute("SELECT next_at FROM observances WHERE session=? AND kind=?", (self.session, kind)).fetchone()
-                if not row:
-                    if kind == "art":
-                        # A random time within this day; a late boot gets one
-                        # catch-up artwork, never a stack of missed days.
-                        target = now.replace(hour=9, minute=0, second=0, microsecond=0) + timedelta(minutes=random.randrange(720))
-                    elif kind == "sermon":
-                        target = now + timedelta(days=random.choice((2, 3)))
-                    else:
-                        target = now.replace(hour=self.morning_hour, minute=0, second=0, microsecond=0)
-                    due = target.isoformat()
-                    db.execute("INSERT INTO observances VALUES (?,?,?)", (self.session, kind, due))
-                else:
-                    due = row[0]
-                if now < datetime.fromisoformat(due):
-                    continue
-                # Missed mornings skip rather than greeting someone at night.
-                deliver = kind != "morning" or self.morning_hour <= now.hour < min(24, self.morning_hour + 3)
-                if kind == "art":
-                    result = artwork(readings, today)
-                    target = (now + timedelta(days=1)).replace(hour=9, minute=0, second=0, microsecond=0) + timedelta(minutes=random.randrange(720))
-                elif kind == "sermon":
-                    result = sermon(readings)
-                    target = now + timedelta(days=random.choice((2, 3)))
-                else:
-                    result = morning(readings, now)
-                    target = (now + timedelta(days=1)).replace(hour=self.morning_hour, minute=0, second=0, microsecond=0)
-                if deliver:
-                    self.memory.insert_entry(db, self.session, "marsi", kind, result["text"], result.get("spoken_text"), scheduled=True)
-                    created.append(result)
-                db.execute("UPDATE observances SET next_at=? WHERE session=? AND kind=?", (target.isoformat(), self.session, kind))
-        return created
+from .observances import Observances

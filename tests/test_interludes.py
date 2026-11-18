@@ -6,7 +6,7 @@ from unittest.mock import patch
 from marsi_local.interludes import TYPES, InterludeTimer, build_interlude
 from marsi_local.lore import Lore
 from marsi_local.client import Client, ClientError
-from tests.test_web import BrowserRoutes
+from tests import test_web as fixtures
 
 
 NOW = datetime(2026, 11, 18, 12, tzinfo=timezone.utc)
@@ -53,7 +53,7 @@ class InterludeTests(unittest.TestCase):
 
 
 class InterludeAPITests(unittest.TestCase):
-    setUp = BrowserRoutes.setUp
+    setUp = fixtures.BrowserRoutes.setUp
 
     def test_authenticated_ephemeral_reads_work_during_inference(self):
         before = self.api.journal()

@@ -24,6 +24,7 @@ from .language import ENGLISH_RECOVERY, ENGLISH_REWRITE, LanguageCheckError, det
 from .model_tools import CLIMATE_GUIDANCE, CLIMATE_SCHEMAS, MAX_TOOL_CALLS, ToolProtocolError, parse_calls, research_choice
 from .reading_tools import ClimateReading, ReadingTools, climate_intent
 from .web_research import MAX_QUERY, Research, ResearchError, research_query
+from .sermons import daily_sermon
 
 
 LOG = logging.getLogger(__name__)
@@ -83,12 +84,23 @@ class Memory:
                     session TEXT NOT NULL, kind TEXT NOT NULL, next_at TEXT NOT NULL,
                     PRIMARY KEY(session, kind));
                 CREATE TABLE IF NOT EXISTS migrations (name TEXT PRIMARY KEY);
+                CREATE TABLE IF NOT EXISTS sermon_days (
+                    session TEXT NOT NULL, day TEXT NOT NULL, entry_id INTEGER NOT NULL,
+                    PRIMARY KEY(session,day));
+                CREATE TABLE IF NOT EXISTS sermon_usage (
+                    session TEXT NOT NULL, sermon_id TEXT NOT NULL, cycle INTEGER NOT NULL,
+                    PRIMARY KEY(session,sermon_id));
             """)
             if not db.execute("SELECT 1 FROM migrations WHERE name='journal-v1'").fetchone():
                 for session, user, reply in db.execute("SELECT session,user,reply FROM turns ORDER BY id").fetchall():
                     self.insert_entry(db, session, "human", "chat", user)
                     self.insert_entry(db, session, "marsi", "chat", reply)
                 db.execute("INSERT INTO migrations VALUES ('journal-v1')")
+            if not db.execute("SELECT 1 FROM migrations WHERE name='sermon-days-v1'").fetchone():
+                for entry_id, session, at in db.execute("SELECT id,session,at FROM journal WHERE kind='sermon' ORDER BY id"):
+                    day = datetime.fromisoformat(at).astimezone().date().isoformat()
+                    db.execute("INSERT OR IGNORE INTO sermon_days VALUES (?,?,?)", (session, day, entry_id))
+                db.execute("INSERT INTO migrations VALUES ('sermon-days-v1')")
 
     @contextmanager
     def connect(self):
@@ -150,7 +162,7 @@ class Memory:
 
     def forget(self, session: str):
         with self.connect() as db:
-            for table in ("turns", "notes", "journal", "observances"):
+            for table in ("turns", "notes", "journal", "observances", "sermon_days", "sermon_usage"):
                 db.execute(f"DELETE FROM {table} WHERE session=?", (session,))
             db.execute("DELETE FROM sessions WHERE id=?", (session,))
 
@@ -296,7 +308,8 @@ class Companion:
         self.telemetry = Telemetry()
         self.tools = ReadingTools(config)
         self.researcher = Research(config.searxng_port)
-        self.observances = Observances(self.memory, config.schedule_session, config.morning_hour)
+        self.observances = Observances(self.memory, config.schedule_session, config.morning_hour,
+                                       config.quiet_start, config.quiet_end)
 
     @contextmanager
     def exclusive(self):
@@ -551,6 +564,9 @@ class Companion:
 
     def inscription(self, session, kind):
         readings = self.telemetry.pair()
+        if kind == "sermon":
+            climate = self.tools.climate.current() if self.tools.climate is not None else None
+            return daily_sermon(self.memory, session, readings, climate)
         result = artwork(readings, random.getrandbits(64)) if kind == "art" else sermon(readings)
         self.memory.add_event(session, result)
         return result

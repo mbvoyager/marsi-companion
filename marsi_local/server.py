@@ -68,7 +68,8 @@ class Server(ThreadingHTTPServer):
         while not self.stopping.is_set():
             try:
                 app = self.companion
-                app.observances.run(datetime.now().astimezone(), app.telemetry.pair(), app.config.observances)
+                climate = self.climate.current() if self.climate is not None else None
+                app.observances.run(datetime.now().astimezone(), app.telemetry.pair(), app.config.observances, climate)
             except Exception as error:
                 LOG.error("Observance could not be recorded (%s)", type(error).__name__)
             self.stopping.wait(60)

@@ -86,16 +86,17 @@ class ObservanceTests(DatabaseFixture):
     def test_calendar_survives_restart_and_prevents_duplicates(self):
         scheduler = Observances(self.memory)
         now = datetime(2026, 10, 4, 6)
-        with patch("marsi_local.liturgy.random.randrange", return_value=0), patch("marsi_local.liturgy.random.choice", return_value=2):
+        with patch("marsi_local.observances.random.choice", side_effect=lambda seq: seq[0]):
             self.assertEqual(scheduler.run(now, {}), [])
             self.assertEqual([r["source"] for r in scheduler.run(now.replace(hour=7), {})], ["morning"])
             self.assertEqual(scheduler.run(now.replace(hour=7), {}), [])
-            self.assertEqual([r["source"] for r in scheduler.run(now.replace(hour=9), {})], ["art"])
+            self.assertEqual([r["source"] for r in scheduler.run(now.replace(hour=9), {})], ["sermon"])
         reopened = Observances(Memory(self.path))
         self.assertEqual(reopened.run(now.replace(hour=9), {}), [])
-        result = reopened.run(now + timedelta(days=2), {})
-        self.assertEqual({r["source"] for r in result}, {"art", "sermon"})
-        self.assertEqual(reopened.run(now + timedelta(days=2), {}), [])
+        with patch("marsi_local.observances.random.choice", side_effect=lambda seq: seq[0]):
+            result = reopened.run((now + timedelta(days=2)).replace(hour=21), {})
+        self.assertEqual({r["source"] for r in result}, {"sermon"})
+        self.assertEqual(reopened.run((now + timedelta(days=2)).replace(hour=21), {}), [])
         self.assertTrue(all(entry["scheduled"] for entry in self.memory.journal("pi")["entries"]))
 
     def test_late_morning_skips_without_backlog_and_dst_keeps_local_hour(self):
