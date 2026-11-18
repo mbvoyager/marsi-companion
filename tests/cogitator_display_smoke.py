@@ -69,7 +69,11 @@ class CogitatorDisplaySmoke(unittest.TestCase):
         self.display.interlude_canvas.event_generate("<ButtonPress-1>",x=20,y=20)
         self.root.update()
         self.assertIsNone(self.display.interlude)
+        # Restoring controls may resize the portrait. Its renderer correctly
+        # rebuilds on resize, so inspect the current lens rather than a deleted ID.
+        self.root.update_idletasks()
         self.display.draw(time.monotonic())
+        eye = self.display.effigy.eyes[0]["items"][0]
         self.assertEqual(self.display.canvas.itemcget(eye,"fill"),"#63d8df")
 
     def test_typewriter_reveals_only_new_marsi_text_and_restores_complete_text(self):
