@@ -1,0 +1,16 @@
+{
+  "colors": {
+    "black": "#090708", "panel": "#12100e", "raised": "#1b1713",
+    "red": "#b34d43", "rust": "#ee8779", "green": "#9fbf97",
+    "bone": "#e5d9bd", "brass": "#bca16d", "dim": "#58422e",
+    "muted": "#b3a38a", "amber": "#ffb000"
+  },
+  "layout": {"frame": 1, "inset": 8, "cut": 9, "touch": 44, "fps": 15},
+  "type": {"body": 13, "small": 11, "title": 16, "reading": 32},
+  "sensors": [
+    {"color": "#ffb000", "shape": "circle", "dash": []},
+    {"color": "#e5d9bd", "shape": "diamond", "dash": [6, 3]},
+    {"color": "#ee8779", "shape": "square", "dash": [2, 3]},
+    {"color": "#bca16d", "shape": "triangle", "dash": [7, 3, 2, 3]}
+  ]
+}
