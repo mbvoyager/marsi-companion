@@ -1,4 +1,4 @@
-"""A phosphor archive with original ASCII artwork and read-only machine cant."""
+"""The Pi cogitator: durable vox log, local readings and ephemeral interludes."""
 from __future__ import annotations
 
 from datetime import datetime
@@ -6,6 +6,7 @@ from math import ceil
 import os
 from pathlib import Path
 import queue
+import random
 import subprocess
 import threading
 import time
@@ -13,8 +14,13 @@ import time
 from .ambient import Ambient, quiet_hour
 from .client import Client, ClientError, HELP, command
 from .climate_view import ClimateView
-from .liturgy import BLACK, GREEN, RED, without_emoji
-from .electoo import BONE, BRASS, Electoo
+from .liturgy import without_emoji
+from .theme import BLACK, GREEN, RED, BONE, BRASS, DIM, AMBER, TYPE, LAYOUT, imperial_date
+from .effigy import Effigy
+from .chrome import Chrome
+from .interludes import InterludeTimer, TYPES, chirp
+from .interlude_view import InterludeView
+from .typewriter import Typewriter
 from .telemetry import Telemetry, reading
 from .config import ROOT
 from .audio import CHECK_COMMAND
@@ -63,18 +69,35 @@ class Display:
         self.hotkey_held = False
         self.hotkey_release = None
         self.tab = "chat"
+        self.interlude = None
+        self.interlude_pending = False
+        self.interlude_sound = None
+        self.interlude_chirp = os.getenv("MARSI_INTERLUDE_CHIRP", "false").lower() == "true"
+        self.interlude_until = self.concerned_until = 0
+        self.lost_sensors = set()
+        self.reduced_motion = os.getenv("MARSI_REDUCED_MOTION", "false").lower() == "true"
+        self.typewriter_enabled = os.getenv("MARSI_TYPEWRITER", "true").lower() == "true"
         self.ambient = Ambient(
             minimum=float(os.getenv("MARSI_RITUAL_MIN_SECONDS", "600")),
             maximum=float(os.getenv("MARSI_RITUAL_MAX_SECONDS", "1200")),
             quiet_start=int(os.getenv("MARSI_QUIET_START", "22")),
             quiet_end=int(os.getenv("MARSI_QUIET_END", "8")),
         )
+        self.interlude_timer = InterludeTimer(
+            minimum=float(os.getenv("MARSI_INTERLUDE_MIN_SECONDS", "1800")),
+            maximum=float(os.getenv("MARSI_INTERLUDE_MAX_SECONDS", "5400")),
+            quiet_start=self.ambient.quiet_start, quiet_end=self.ambient.quiet_end,
+            idle_seconds=float(os.getenv("MARSI_INTERLUDE_IDLE_SECONDS", "120")))
+        self.interlude_min_duration = int(os.getenv("MARSI_INTERLUDE_MIN_DURATION", "15"))
+        self.interlude_max_duration = int(os.getenv("MARSI_INTERLUDE_MAX_DURATION", "30"))
+        if not 15 <= self.interlude_min_duration <= self.interlude_max_duration <= 30:
+            raise ValueError("Interlude duration must be 15..30 seconds, minimum <= maximum")
         self.speak = tk.BooleanVar(value=os.getenv("MARSI_SPEAK", "true").lower() == "true")
         self.rituals = tk.BooleanVar(value=os.getenv("MARSI_RITUALS", "true").lower() == "true")
         self.ritual_speech = os.getenv("MARSI_RITUAL_SPEECH", "false").lower() == "true"
         self.observance_speech = os.getenv("MARSI_OBSERVANCE_SPEECH", "true").lower() == "true"
         self.morning_override = os.getenv("MARSI_MORNING_SPEECH_DURING_QUIET", "true").lower() == "true"
-        root.title("MARSI // ARCHIVUM MARTIS")
+        root.title("MARSI // COGITATOR DOMUS")
         root.geometry("800x480")
         root.minsize(480, 320)
         root.configure(bg=BLACK)
@@ -86,8 +109,10 @@ class Display:
         root.protocol("WM_DELETE_WINDOW", self.close)
         root.columnconfigure(0, weight=1)
         root.rowconfigure(2, weight=1)
-        self.frieze = tk.Canvas(root, bg=BLACK, highlightthickness=0, height=52)
-        self.frieze.grid(row=0, column=0, sticky="ew")
+        self.chrome_header = tk.Canvas(root, bg=BLACK, highlightthickness=0, height=30)
+        self.chrome_header.grid(row=0, column=0, sticky="ew", padx=6, pady=(4, 0))
+        self.chrome = Chrome(self.chrome_header, self.mono, "MARSI // COGITATOR")
+        self.date_item = self.chrome_header.create_text(0, 0, anchor="e", text="", fill=BRASS, font=(self.mono, -11))
         header = tk.Frame(root, bg=BLACK)
         header.grid(row=1, column=0, sticky="ew")
         header.columnconfigure(0, weight=1)
@@ -101,32 +126,34 @@ class Display:
         tabs = tk.Frame(header, bg=BLACK)
         tabs.grid(row=1, column=0, columnspan=2, sticky="ew", padx=7, pady=(0, 3))
         self.tab_buttons = {}
-        for key, label in (("chat", "[ CHAT ]"), ("climate", "[ CLIMATE ]")):
+        for key, label in (("chat", "VOX LOG"), ("climate", "CLIMATE")):
             tab = self.button(tabs, label, lambda key=key: self.select_tab(key))
-            tab.configure(fg=GREEN if key == self.tab else BONE)
+            tab.configure(fg=AMBER if key == self.tab else BONE)
             tab.pack(side="left", padx=(0, 3))
             self.tab_buttons[key] = tab
+        self.button(tabs, "AUSPEX", lambda: self.request_interlude("auspex")).pack(side="left", padx=3)
+        self.services_status = tk.Label(tabs, text="MQTT ? / ZIGBEE ?", bg=BLACK, fg=BRASS, font=(self.mono, -11))
+        self.services_status.pack(side="right", padx=4)
         body = tk.Frame(root, bg=BLACK)
-        body.grid(row=2, column=0, sticky="nsew", padx=7)
+        body.grid(row=2, column=0, sticky="nsew", padx=LAYOUT["inset"])
         body.columnconfigure(0, weight=1)
         body.rowconfigure(0, weight=1)
-        archive = tk.Frame(body, bg=BLACK, highlightbackground=RED, highlightthickness=1)
+        archive = tk.Frame(body, bg=BLACK, highlightbackground=DIM, highlightthickness=LAYOUT["frame"])
         archive.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
         archive.columnconfigure(1, weight=1)
         archive.rowconfigure(1, weight=1)
         tools = tk.Frame(archive, bg=BLACK)
         tools.grid(row=0, column=0, columnspan=3, sticky="ew")
-        self.older = self.button(tools, "[ OLDER TRANSMISSIONS ]", self.load_older)
+        self.older = self.button(tools, "++ VOX LOG / OLDER ++", self.load_older)
         self.older.pack(side="left", expand=True, fill="x")
         self.button(tools, "LATEST", self.jump_latest).pack(side="right")
-        self.rail = tk.Canvas(archive, bg=BLACK, highlightthickness=0, width=17)
-        self.rail.grid(row=1, column=0, sticky="ns")
-        self.archive_font = tkfont.Font(family=self.mono, size=10)
+        self.archive_font = tkfont.Font(family=self.mono, size=-TYPE["body"])
         self.reply = tk.Text(archive, bg=BLACK, fg=BONE, font=self.archive_font,
                              wrap="word", relief="flat", padx=8, pady=6, state="disabled",
                              selectbackground=RED, selectforeground=GREEN, insertbackground=GREEN,
                              width=1, height=1)
         self.reply.grid(row=1, column=1, sticky="nsew")
+        self.typer = Typewriter(self.reply, self.reduced_motion or not self.typewriter_enabled)
         self.reply.tag_configure("human", foreground=GREEN)
         self.reply.tag_configure("marsi", foreground=BONE)
         self.reply.tag_configure("system", foreground=BRASS)
@@ -142,12 +169,12 @@ class Display:
         self.scroll.bind("<Configure>", lambda event: scroll_change(*self.reply.yview()))
         for event in ("<Button-1>", "<B1-Motion>"):
             self.scroll.bind(event, lambda event: self.reply.yview_moveto(event.y / max(1, self.scroll.winfo_height())))
-        side = tk.Frame(body, bg=BLACK, width=252)
+        side = tk.Frame(body, bg=BLACK, width=198, highlightbackground=DIM, highlightthickness=1)
         side.grid(row=0, column=1, sticky="ns")
         side.grid_propagate(False)
         side.columnconfigure(0, weight=1)
         side.rowconfigure(1, weight=1)
-        self.unit_label = tk.Label(side, text="[ MARSI / MARS RELIQUARY ]", bg=BLACK, fg=BONE,
+        self.unit_label = tk.Label(side, text="++ MARSI ++", bg=BLACK, fg=AMBER,
                                    font=(self.mono, 10, "bold"))
         self.unit_label.grid(row=0, column=0, sticky="ew")
         self.canvas = tk.Canvas(side, bg=BLACK, highlightthickness=0, height=180, width=249)
@@ -159,12 +186,12 @@ class Display:
         self.seal = tk.Label(side, text="[ AWAITING DATA ]\nKNOWLEDGE IS THE OFFERING", bg=BLACK, fg=BRASS,
                             font=(self.mono, 8), justify="left")
         self.seal.grid(row=3, column=0, sticky="sw", pady=3)
-        self.lower_frieze = tk.Canvas(root, bg=BLACK, highlightthickness=0, height=24)
-        self.lower_frieze.grid(row=3, column=0, sticky="ew", pady=(3, 0))
-        self.electoos = [Electoo(self.frieze, self.mono), Electoo(self.lower_frieze, self.mono),
-                        Electoo(self.rail, self.mono, "rail"), Electoo(self.canvas, self.mono, "effigy")]
+        self.effigy = Effigy(self.canvas, self.mono, "effigy")
+        self.interlude_canvas = tk.Canvas(body, bg=BLACK, highlightthickness=0, width=1, height=1, takefocus=True)
+        self.interlude_canvas.bind("<ButtonPress>", lambda event: self.dismiss_interlude())
+        self.interlude_canvas.bind("<KeyPress>", lambda event: (self.dismiss_interlude(), "break")[1])
         controls = tk.Frame(root, bg=BLACK)
-        controls.grid(row=4, column=0, sticky="ew", padx=7, pady=5)
+        controls.grid(row=3, column=0, sticky="ew", padx=7, pady=5)
         controls.columnconfigure(1, weight=1)
         tk.Label(controls, text=">", bg=BLACK, fg=GREEN, font=(self.mono, 12)).grid(row=0, column=0)
         self.input = tk.Entry(controls, bg=BLACK, fg=GREEN, insertbackground=GREEN,
@@ -178,31 +205,35 @@ class Display:
         self.talk.grid(row=0, column=3, padx=2)
         options = tk.Frame(controls, bg=BLACK)
         options.grid(row=1, column=0, columnspan=4, sticky="ew", pady=(4, 0))
-        for label, variable in (("Voice", self.speak), ("Idle rites", self.rituals)):
+        for label, variable in (("Voice", self.speak), ("Idle", self.rituals)):
             toggle = self.button(options, ("[X] " if variable.get() else "[ ] ") + label,
                                  lambda variable=variable: variable.set(not variable.get()))
             toggle.configure(fg=GREEN)
             toggle.pack(side="left", padx=1)
             variable.trace_add("write", lambda *args, label=label, variable=variable, toggle=toggle:
                                toggle.configure(text=("[X] " if variable.get() else "[ ] ") + label))
-        for label, action in (("ART", self.manual_art), ("BLESS", self.manual_ritual),
+        for label, action in (("SERMON", self.manual_sermon), ("BLESS", self.manual_ritual),
                               ("FORGET", self.forget), ("HELP", lambda: self.show_text(HELP))):
             self.button(options, label, action).pack(side="left", padx=2)
         root.bind("<Configure>", lambda event: self.resize() if event.widget is root else None)
         self.archive, self.side, self.controls = archive, side, controls
         self.climate = ClimateView(body, client, self.events, self.mono, self.button)
+        if hasattr(client, "climate_events"):
+            self.climate.start()
         self.show_text("ARCHIVUM MARTIS // MACHINE-FLOW APERTURE\n"
                        "Mars reliquary -> near-side Terra\n"
                        "Bring me an observation, little keeper.\nType help for the local command cant.")
         self.resize()
         self.pointer_cursor = install_reticle(root, drawn=drawn_cursor)
+        for event in ("<KeyPress>", "<ButtonPress>", "<Motion>"):
+            root.bind_all(event, self.interact, add="+")
         self.input.focus_set()
-        self.tick_job = root.after(50, self.tick)
+        self.tick_job = root.after(70, self.tick)
 
     def button(self, parent, text, action):
-        return self.tk.Button(parent, text=text, command=action, bg=BLACK, fg=RED,
-                              activebackground=RED, activeforeground=GREEN, disabledforeground=RED,
-                              relief="flat", highlightbackground=RED, highlightthickness=1,
+        return self.tk.Button(parent, text=text, command=action, bg=BLACK, fg=BONE,
+                              activebackground=DIM, activeforeground=AMBER, disabledforeground=BRASS,
+                              relief="flat", highlightbackground=DIM, highlightthickness=1,
                               borderwidth=0, font=(self.mono, 9), padx=4, pady=2)
 
     def select_tab(self, tab):
@@ -211,12 +242,10 @@ class Display:
         self.tab = tab
         self.last_interaction = time.monotonic()
         for key, button in self.tab_buttons.items():
-            button.configure(fg=GREEN if key == tab else BONE)
+            button.configure(fg=AMBER if key == tab else BONE)
         if tab == "climate":
             self.archive.grid_remove()
-            self.side.grid_remove()
-            self.controls.grid_remove()
-            self.climate.frame.grid(row=0, column=0, columnspan=2, sticky="nsew")
+            self.climate.frame.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
             self.climate.start()
             self.tab_buttons["climate"].focus_set()
         else:
@@ -225,31 +254,39 @@ class Display:
             self.side.grid()
             self.controls.grid()
             self.input.focus_set()
+        self.resize()
 
     def resize(self):
         compact = self.root.winfo_width() < 640 or self.root.winfo_height() < 400
-        self.side.configure(width=142 if compact else 252)
-        self.canvas.configure(height=86 if compact else 160, width=139 if compact else 249)
-        self.frieze.configure(height=30 if compact else 52)
-        self.lower_frieze.configure(height=18 if compact else 24)
-        size = 8 if compact else 10
-        available = max(60, self.root.winfo_width() - (142 if compact else 252) - 54)
-        self.archive_font.configure(size=size)
+        self.side.configure(width=132 if compact else 198)
+        self.canvas.configure(height=86 if compact else 160, width=129 if compact else 195)
+        self.chrome_header.configure(height=25 if compact else 30)
+        size = TYPE["small"] if compact else TYPE["body"]
+        available = max(60, self.root.winfo_width() - (132 if compact else 198) - 40)
+        self.archive_font.configure(size=-size)
         while size > 5 and self.archive_font.measure("+" + "=" * 38 + "+") > available - 16:
             size -= 1
-            self.archive_font.configure(size=size)
+            self.archive_font.configure(size=-size)
         self.meter_label.configure(font=(self.mono, 7 if compact else 8))
-        self.unit_label.configure(text="[ MARSI / MARS ]" if compact else "[ MARSI / MARS RELIQUARY ]",
+        self.unit_label.configure(text="++ MARSI ++",
                                   font=(self.mono, 7 if compact else 10, "bold"))
         if compact:
             self.seal.grid_remove()
         else:
             self.seal.grid()
+        if compact and (self.tab == "climate" or self.interlude is not None):
+            self.controls.grid_remove()
+        else:
+            self.controls.grid()
 
     def show_text(self, text, tag="system"):
         bottom = self.reply.yview()[1] >= 0.98
         self.reply.configure(state="normal")
-        self.reply.insert("end", without_emoji(text) + "\n\n", tag)
+        start = self.reply.index("end-1c")
+        text = without_emoji(text)
+        self.reply.insert("end", text + "\n\n", tag)
+        if tag == "marsi" and hasattr(self, "typer"):
+            self.typer.add(start, text)
         self.reply.configure(state="disabled")
         if bottom:
             self.reply.see("end")
@@ -267,22 +304,41 @@ class Display:
         if not new:
             return
         previous_last = max(self.entries, default=0)
+        animate_ids = set()
+        if not older and not initial:
+            for entry in reversed(new):
+                try:
+                    age = (datetime.now().astimezone()-datetime.fromisoformat(entry["at"]).astimezone()).total_seconds()
+                except ValueError:
+                    continue
+                if entry["role"] == "marsi" and -5 <= age <= 120:
+                    animate_ids.add(entry["id"])
+                    if len(animate_ids) == 2:
+                        break
         bottom = self.reply.yview()[1] >= 0.98
         for entry in new:
             self.entries[entry["id"]] = entry
         self.before = min(self.entries)
         self.reply.configure(state="normal")
         if older:
+            if hasattr(self, "typer"):
+                self.typer.finish()
             for entry in reversed(new):
                 self.reply.insert("1.0", self.formatted(entry), entry["role"])
             self.reply.see("1.0")
         else:
             for entry in new:
-                self.reply.insert("end", self.formatted(entry), entry["role"])
+                formatted = self.formatted(entry)
+                start = self.reply.index("end-1c")
+                self.reply.insert("end", formatted, entry["role"])
+                if entry["id"] in animate_ids and hasattr(self, "typer"):
+                    self.typer.add(f"{start}+{formatted.index(chr(10))+1}c", without_emoji(entry["text"]))
                 if entry.get("scheduled") and entry["kind"] in ("morning", "sermon") and entry.get("spoken_text") and entry["id"] > self.last_spoken:
                     self.pending_spoken = entry
         out_of_order = not older and min(entry["id"] for entry in new) < previous_last
         if len(self.entries) > 600 or out_of_order:
+            if hasattr(self, "typer"):
+                self.typer.finish()
             ordered = sorted(self.entries)
             keep = (ordered[:500] if older else ordered[-500:]) if len(ordered) > 600 else ordered
             self.entries = {key: self.entries[key] for key in keep}
@@ -405,6 +461,10 @@ class Display:
         self.reply.insert("end", self.last_progress, ("system", "pending", "progress"))
 
     def begin_transmission(self, text=None, kind="rite"):
+        if getattr(self, "interlude", None) is not None:
+            self.dismiss_interlude()
+        if hasattr(self, "typer"):
+            self.typer.finish()
         now = time.monotonic()
         self.pending = Transmission(kind, text, datetime.now().astimezone().isoformat(),
                                     now, self.response_times.estimate(kind))
@@ -510,7 +570,9 @@ class Display:
             return
         self.input.delete(0, "end")
         self.last_interaction = time.monotonic()
-        if action == "help":
+        if action in TYPES or action == "interlude":
+            self.request_interlude(None if action == "interlude" else action)
+        elif action == "help":
             self.show_text(HELP)
         elif action == "forget":
             self.forget()
@@ -522,12 +584,15 @@ class Display:
             self.start_task(lambda: {"text": "Saved notes:\n" + "\n".join(self.client.remember(text[10:])["notes"]), "source": "system"}, kind="archive")
         else:
             speak = self.speak.get()
-            task = {"art": self.client.art, "sermon": self.client.sermon, "ritual": self.client.ritual}.get(action)
+            task = {"sermon": self.client.sermon, "ritual": self.client.ritual}.get(action)
             self.start_task(lambda: task(speak) if task else self.client.chat(text, speak), speak,
                             text=None if task else text,
                             kind="rite" if task else ("chat-voice" if speak else "chat"))
 
     def hotkey(self, event):
+        if self.interlude is not None:
+            self.dismiss_interlude()
+            return "break"
         if self.hotkey_release is not None:
             self.root.after_cancel(self.hotkey_release)
             self.hotkey_release = None
@@ -569,11 +634,11 @@ class Display:
                 return self.client.voice(recording, speak)
             threading.Thread(target=self.worker, args=(capture, speak), daemon=True).start()
 
-    def manual_art(self):
+    def manual_sermon(self):
         if not self.busy:
             self.last_interaction = time.monotonic()
             speak = self.speak.get()
-            self.start_task(lambda: self.client.art(speak), speak)
+            self.start_task(lambda: self.client.sermon(speak), speak)
 
     def manual_ritual(self):
         if not self.busy:
@@ -595,7 +660,7 @@ class Display:
 
     def scheduled_voice(self, now):
         entry = self.pending_spoken
-        if not entry or self.busy or not self.link_online:
+        if not entry or self.busy or not self.link_online or getattr(self, "interlude", None) is not None:
             return
         age = (datetime.now().astimezone() - datetime.fromisoformat(entry["at"])).total_seconds()
         if age > 600 or not self.speak.get() or not self.rituals.get() or not self.observance_speech:
@@ -650,6 +715,18 @@ class Display:
                 self.finish_poll(*result)
             elif kind == "climate":
                 self.climate.receive(*result, time.monotonic())
+                if result[0] == "snapshot":
+                    lost = {s["id"] for s in result[1]["sensors"] if s.get("connection") == "lost"}
+                    if lost-self.lost_sensors:
+                        self.concerned_until = time.monotonic()+3
+                    self.lost_sensors = lost
+            elif kind == "interlude":
+                self.interlude_pending = False
+                generation, interacted, manual, packet = result
+                if packet is not None and generation == self.generation and not self.busy and (manual or self.last_interaction == interacted):
+                    self.show_interlude(packet)
+                elif packet is None and manual and generation == self.generation:
+                    self.status.set("[AUSPEX] The local reliquary is quiet. Try again shortly.")
             elif kind == "speaking":
                 self.mode = "speaking"
             elif kind == "spoken":
@@ -682,24 +759,44 @@ class Display:
                 self.last_interaction = time.monotonic()
                 self.next_poll_at = 0
         now = time.monotonic()
+        if self.interlude is not None and now >= self.interlude_until:
+            self.dismiss_interlude()
+        self.typer.tick()
         self.update_progress(now)
         if now >= self.next_poll_at and not self.polling:
             self.poll()
         self.update_link_status(now)
         self.scheduled_voice(now)
-        if self.link_online and self.restored and self.ambient.due(now, datetime.now().hour, self.last_interaction, self.busy, self.rituals.get()):
+        if self.link_online and self.restored and self.interlude_timer.due(now, datetime.now().hour, self.last_interaction,
+                self.busy or self.interlude_pending or self.interlude is not None, self.rituals.get()):
+            self.request_interlude(manual=False)
+        if self.link_online and self.restored and self.ambient.due(now, datetime.now().hour, self.last_interaction,
+                self.busy or self.interlude_pending or self.interlude is not None, self.rituals.get()):
             speak = self.ritual_speech and self.speak.get()
             self.start_task(lambda: self.client.ritual(speak), speak)
         self.draw(now)
-        self.tick_job = self.root.after(200, self.tick)
+        self.tick_job = self.root.after(70, self.tick)
 
     def draw(self, now):
-        electoos = self.electoos if self.tab == "chat" else self.electoos[:2]
-        for electoo in electoos:
-            electoo.draw(now, self.mode)
+        self.chrome.draw()
+        self.chrome_header.coords(self.date_item, self.chrome_header.winfo_width()-12, self.chrome_header.winfo_height()/2)
+        self.chrome_header.itemconfigure(self.date_item, text=imperial_date())
+        self.chrome_header.tag_raise(self.date_item)
+        services = (self.climate.snapshot or {}).get("services", {}) if self.climate.status_available else {}
+        if self.interlude is not None:
+            services = self.interlude.packet["data"].get("services", services)
+        short = lambda name: {"online": "ON", "offline": "OFF"}.get(services.get(name), "?")
+        state = GREEN if all(services.get(key) == "online" for key in ("mqtt", "zigbee2mqtt")) else RED if "offline" in services.values() else BRASS
+        self.services_status.configure(text=f"MQTT {short('mqtt')} / ZIGBEE {short('zigbee2mqtt')}", fg=state)
+        mode = self.mode
+        if self.interlude is not None:
+            mode = "vox" if self.interlude.packet["type"] == "vox" and now-self.interlude.started < 1.5 else "interlude"
+            self.interlude.draw(now)
+        elif now < self.concerned_until:
+            mode = "concerned"
+        self.effigy.draw(12.3 if self.reduced_motion else now, mode)
         if self.tab == "climate":
             self.climate.tick(now)
-            return
         phrases = {"listening": "[ RECEIVING / VOX ]\nEVERY WORD, A DATUM",
                    "thinking": "[ CORRELATING DATA ]\nSEEK THE HIDDEN PATTERN",
                    "speaking": "[ TRANSMITTING / VOX ]\nKNOWLEDGE RETURNS TO TERRA"}
@@ -710,14 +807,77 @@ class Display:
             if data is None:
                 meters.extend((name.upper() + " / LINK SILENT", "DATA UNAVAILABLE"))
                 continue
-            meters.extend((f"{name.upper()} CPU {reading(data.get('cpu_percent'), '%')} / {reading(data.get('temperature_c'), 'C')}",
-                           f"LOAD {reading(data.get('load1'))} / DISK {reading(data.get('disk_used_percent'), '%')}"))
+            meters.append(f"{name.upper()} {reading(data.get('temperature_c'), 'C')} / CPU {reading(data.get('cpu_percent'), '%')}")
+            if self.root.winfo_height() >= 400:
+                meters.append(f"LOAD {reading(data.get('load1'))} / DISK {reading(data.get('disk_used_percent'), '%')}")
         self.meters.set("\n".join(meters))
+
+    def interact(self, event):
+        self.last_interaction = time.monotonic()
+        if self.interlude is not None and str(event.type) in ("2", "4", "KeyPress", "ButtonPress"):
+            self.dismiss_interlude()
+
+    def request_interlude(self, kind=None, *, manual=True):
+        if self.busy or self.interlude_pending or not self.can_contact():
+            return
+        self.dismiss_interlude()
+        self.interlude_pending = True
+        generation, interacted = self.generation, self.last_interaction
+        duration = random.randint(self.interlude_min_duration, self.interlude_max_duration)
+        def collect():
+            try:
+                packet = self.client.interlude(kind, duration)
+            except (ClientError, ValueError):
+                packet = None
+            self.events.put(("interlude", (generation, interacted, manual, packet)))
+        threading.Thread(target=collect, daemon=True).start()
+
+    def show_interlude(self, packet):
+        self.typer.finish()
+        self.interlude_canvas.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
+        self.root.tk.call("raise", self.interlude_canvas._w)
+        self.interlude_canvas.focus_set()
+        now = time.monotonic()
+        self.interlude = InterludeView(self.interlude_canvas, self.mono, packet, now, self.reduced_motion)
+        for name, data in packet["data"]["machines"].items():
+            if data is not None:
+                self.readings[name] = data
+        self.resize()
+        self.interlude_until = now+packet["duration"]
+        if self.interlude_chirp:
+            view = self.interlude
+            def announce():
+                from .pi import play
+                def handle(process):
+                    self.interlude_sound = process
+                    if process is not None and (self.closed or self.interlude is not view):
+                        process.terminate()
+                try:
+                    play(chirp(), handle)
+                except (OSError, subprocess.SubprocessError, ValueError):
+                    pass
+            threading.Thread(target=announce, daemon=True).start()
+
+    def dismiss_interlude(self):
+        if self.interlude_sound is not None:
+            try:
+                self.interlude_sound.terminate()
+            except OSError:
+                pass
+        if self.interlude is not None:
+            self.interlude = None
+            self.interlude_canvas.grid_remove()
+            self.last_interaction = time.monotonic()
+            self.input.focus_set()
+            self.resize()
+        self.interlude_timer.schedule(time.monotonic())
 
     def close(self):
         if self.closed:
             return
         self.closed = True
+        self.dismiss_interlude()
+        self.typer.finish()
         self.root.after_cancel(self.tick_job)
         if self.hotkey_release is not None:
             self.root.after_cancel(self.hotkey_release)

@@ -10,7 +10,7 @@ export function validPacket(packet) {
     && typeof packet.data?.machines === "object";
 }
 
-function random(seed) {
+export function sceneRandom(seed) {
   return () => { seed = Math.imul(1664525, seed) + 1013904223 | 0; return (seed >>> 0) / 4294967296; };
 }
 
@@ -119,7 +119,7 @@ export class InterludeView {
   }
 
   build(width, height) {
-    this.w = width; this.h = height; this.rng = random(this.packet.seed);
+    this.w = width; this.h = height; this.rng = sceneRandom(this.packet.seed);
     this.colors = Object.fromEntries(Object.entries(fallback).map(([key,value]) => [key,
       getComputedStyle(this.container).getPropertyValue("--"+key).trim() || value]));
     this.ratio = Math.min(globalThis.devicePixelRatio || 1,2);

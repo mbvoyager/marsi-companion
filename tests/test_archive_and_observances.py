@@ -11,7 +11,7 @@ from marsi_local.client import Client, ClientError, command
 from marsi_local.config import ServerConfig
 from marsi_local.core import Companion, Memory
 from marsi_local.display import Display
-from marsi_local.liturgy import Observances, artwork, without_emoji
+from marsi_local.liturgy import Observances, without_emoji
 from marsi_local.telemetry import FIELDS, Telemetry, numeric_readings
 from tests import test_local_companion as fixtures
 
@@ -108,15 +108,15 @@ class ObservanceTests(DatabaseFixture):
         self.assertIn("morning", [r["source"] for r in next_day])
         self.assertEqual(scheduler.run(datetime(2026, 10, 25, 7, tzinfo=timezone(timedelta(hours=1))), {}), [])
 
-    def test_art_is_ascii_and_shaped_by_real_readings(self):
-        one = {"server": {"load1": 1, "temperature_c": 40}, "pi": None}
-        two = {"server": {"load1": 3, "temperature_c": 60}, "pi": None}
-        a = artwork(one, "today")["text"]
-        self.assertTrue(a.isascii())
-        self.assertEqual(a, artwork(one, "today")["text"])
-        self.assertNotEqual(a, artwork(two, "today")["text"])
-        self.assertIn("40C", a)
-        self.assertIn("PI DATA UNAVAILABLE", a)
+    def test_old_art_entries_remain_readable_after_schedule_migration(self):
+        self.memory.add_event("pi", {"text": "A preserved old diagram.", "source": "art"})
+        with self.memory.connect() as db:
+            db.execute("INSERT OR REPLACE INTO observances VALUES ('pi','art','2000-01-01T09:00:00')")
+        Observances(self.memory).run(datetime(2026, 11, 18, 12), {})
+        old = [entry for entry in self.memory.journal("pi")["entries"] if entry["kind"] == "art"]
+        self.assertEqual([entry["text"] for entry in old], ["A preserved old diagram."])
+        with self.memory.connect() as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM observances WHERE kind='art'").fetchone()[0], 0)
 
     def test_disabled_schedule_creates_no_entries(self):
         self.assertEqual(Observances(self.memory).run(datetime.now(), {}, enabled=False), [])
@@ -139,16 +139,20 @@ class TerminalAPITests(unittest.TestCase):
             self.assertEqual(readings["pi"]["load1"], 2)
             self.assertNotIn("private", str(readings))
 
-    def test_art_and_sermon_are_saved_without_inference_or_ascii_synthesis(self):
+    def test_daily_sermon_and_legacy_art_replay_do_not_use_inference(self):
+        self.app.memory.add_event("pi", {"text": "An old diagram.", "spoken_text": "An old inscription.", "source": "art"})
+        with self.assertRaises(ClientError) as removed:
+            self.client.request("/v1/art", {"session_id": "pi"})
+        self.assertEqual(removed.exception.status, 404)
         with patch.object(self.app.llm, "chat", side_effect=AssertionError("No model for authored observances")):
             with patch.object(self.speech, "synthesize", wraps=self.speech.synthesize) as synthesize:
-                result = self.client.art(speak=True)
+                result = self.client.sermon(speak=True)
                 self.assertNotIn("+==", synthesize.call_args.args[0])
             self.client.sermon()
         journal = self.client.journal()["entries"]
         self.assertEqual([entry["kind"] for entry in journal], ["art", "sermon"])
         self.assertFalse(any(entry["scheduled"] for entry in journal))
-        self.assertEqual(result["entries"][0], journal[0])
+        self.assertEqual(result["entries"][0], journal[-1])
         self.assertEqual(self.app.memory.context("pi"), [])
         spoken = self.client.speak_entry(journal[-1]["id"])
         self.assertEqual(spoken["entry_id"], journal[-1]["id"])
@@ -166,7 +170,8 @@ class TerminalAPITests(unittest.TestCase):
 
 class InterfaceRulesTests(unittest.TestCase):
     def test_commands_are_exact_and_normal_sentences_remain_conversation(self):
-        self.assertEqual(command(" art "), "art")
+        self.assertIsNone(command(" art "))
+        self.assertEqual(command("/auspex"), "auspex")
         self.assertEqual(command("/exit"), "exit")
         self.assertEqual(command("/sermon"), "sermon")
         self.assertIsNone(command("Tell me about art"))

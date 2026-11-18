@@ -1,6 +1,8 @@
 import {ClimateView} from "./climate.mjs";
 import {ClimateAdminView} from "./climate-admin.mjs";
 import {canRecord, openRecorder, replyBlob} from "./vox.mjs";
+import {InterludeView} from "./interludes.mjs";
+import {typeText, finishAllTyping} from "./typing.mjs";
 
 const $ = id => document.getElementById(id);
 const journal = $("journal");
@@ -9,7 +11,7 @@ const player = $("reply-audio");
 const mic = canRecord();
 const sessionKey = "marsi-web-session";
 const viewKey = "marsi-web-view";
-const HELP = "art | sermon | bless | history | /remember TEXT | /notes | /forget | exit\n/research QUESTION (voice: Marsi research, QUESTION)\nF8 or TALK opens the vox. F8 or FINISH seals the recording.";
+const HELP = "sermon | bless | history | /remember TEXT | /notes | /forget | exit\n/auspex | /vox | /servitor | /hololith | /codex | /noosphere | /interlude\n/research QUESTION (voice: Marsi research, QUESTION)\nF8 or TALK opens the vox. F8 or FINISH seals the recording.";
 const REPLY_STREAM = "application/x-ndjson";
 const RESEARCH_PROGRESS = {
   searching: "[ NOOSPHERE ] Searching the Noosphere ...",
@@ -18,6 +20,10 @@ const RESEARCH_PROGRESS = {
 };
 const stampFormat = new Intl.DateTimeFormat("en-GB", {dateStyle: "short", timeStyle: "short"});
 const state = {generation: 0, journalEpoch: 0, unlocked: false, session: "pi", token: "", tab: "chat", entries: new Map()};
+state.lastInteraction = performance.now();
+state.nextInterlude = performance.now()+1800_000+Math.random()*3600_000;
+const interludeTypes = ["auspex", "vox", "servitor", "hololith", "codex", "noosphere", "interlude"];
+const reducedMotion = globalThis.matchMedia?.("(prefers-reduced-motion: reduce)");
 
 async function request(path, {method = "GET", body, signal, headers, stream = false, onProgress} = {}) {
   const parent = signal || state.connection?.signal;
@@ -137,7 +143,7 @@ function nowStamp(at) {
   return Number.isNaN(date.valueOf()) ? "ARCHIVE" : stampFormat.format(date);
 }
 
-function entryNode(role, caption, words) {
+function entryNode(role, caption, words, animate = false) {
   const node = document.createElement("article");
   node.className = "entry " + role;
   const stamp = document.createElement("p");
@@ -147,23 +153,28 @@ function entryNode(role, caption, words) {
   text.className = "words";
   text.textContent = words;
   node.append(stamp, text);
+  if (animate && role === "marsi") typeText(text, words, {follow: () => {
+    if (journal.scrollHeight-journal.scrollTop-journal.clientHeight < 60) journal.scrollTop = journal.scrollHeight;
+  }});
   return node;
 }
 
 function showWords(words, role = "system") {
   const who = role === "marsi" ? "MARSI" : "ARCHIVE";
-  journal.append(entryNode(role, `[ ${who} ]`, words));
+  journal.append(entryNode(role, `[ ${who} ]`, words, role === "marsi"));
   journal.scrollTop = journal.scrollHeight;
 }
 
-function addEntries(entries, {older = false, scroll = false} = {}) {
+function addEntries(entries, {older = false, scroll = false, animate = false} = {}) {
   const atBottom = journal.scrollHeight - journal.scrollTop - journal.clientHeight < 36;
   const previousHeight = journal.scrollHeight;
   const added = [];
+  const animateIds = new Set(animate && !older ? entries.filter(entry => entry.role === "marsi"
+    && Math.abs(Date.now()-Date.parse(entry.at)) <= 120_000).slice(-2).map(entry => entry.id) : []);
   for (const entry of entries) {
     if (state.entries.has(entry.id)) continue;
     const who = entry.role === "human" ? "HUMAN" : "MARSI";
-    const node = entryNode(entry.role, `[ ${nowStamp(entry.at)} / ${entry.kind.toUpperCase()} ] ${who} >`, entry.text);
+    const node = entryNode(entry.role, `[ ${nowStamp(entry.at)} / ${entry.kind.toUpperCase()} ] ${who} >`, entry.text, animateIds.has(entry.id));
     if (entry.spoken_text && ["morning", "sermon", "art"].includes(entry.kind)) {
       const play = document.createElement("button");
       play.type = "button";
@@ -238,6 +249,8 @@ function clearAudio() {
 }
 
 function lockArchive(message = "") {
+  dismissInterlude();
+  finishAllTyping();
   state.generation += 1;
   state.connection?.abort();
   climate.reset();
@@ -317,7 +330,7 @@ async function refreshJournal(older = false) {
   try {
     const page = await journalRequest(older ? {before: Math.min(...ids)} : {after: Math.max(0, ...ids)});
     if (generation !== state.generation || epoch !== state.journalEpoch) return;
-    const added = addEntries(page.entries, {older});
+    const added = addEntries(page.entries, {older, animate: !older});
     if (older) state.hasOlder = page.has_more;
     link("[ LINK ONLINE ]", "live");
     const spoken = added.find(entry => entry.scheduled && entry.spoken_text && ["morning", "sermon"].includes(entry.kind));
@@ -335,11 +348,20 @@ async function refreshJournal(older = false) {
 }
 
 async function refreshTelemetry() {
-  if (!state.unlocked || state.tab !== "chat") return;
+  if (!state.unlocked) return;
   const generation = state.generation;
   try {
     const telemetry = await request("/v1/telemetry");
     if (generation !== state.generation) return;
+    if (telemetry.imperial_date) $("imperial-date").textContent = telemetry.imperial_date;
+    if (Array.isArray(telemetry.quiet_hours) && telemetry.quiet_hours.length === 2
+        && telemetry.quiet_hours.every(hour => Number.isInteger(hour) && hour >= 0 && hour <= 23)) {
+      state.quietHours = telemetry.quiet_hours;
+    }
+    const services = telemetry.services || {};
+    $("machine-services").textContent = `MQTT ${(services.mqtt || "unknown").toUpperCase()} / ZIGBEE ${(services.zigbee2mqtt || "unknown").toUpperCase()}`;
+    $("machine-services").dataset.state = Object.values(services).includes("offline") ? "error"
+      : services.mqtt === "online" && services.zigbee2mqtt === "online" ? "live" : "waiting";
     const field = (value, unit = "") => value == null ? "--" : `${value}${unit}`;
     $("telemetry").textContent = ["pi", "server"].map(name => {
       const data = telemetry[name];
@@ -364,6 +386,8 @@ async function playReply(result, generation) {
 
 async function runTask(action, {label, human = false, forgot = false} = {}) {
   if (!state.unlocked || state.busy || state.opening || state.recorder) return;
+  dismissInterlude();
+  finishAllTyping();
   const generation = state.generation;
   if (forgot) state.journalEpoch += 1;
   state.busy = true;
@@ -385,7 +409,7 @@ async function runTask(action, {label, human = false, forgot = false} = {}) {
       state.hasOlder = false;
       clearAudio();
       showWords("The archive has been cleared for this session.");
-    } else if (result.entries?.length) addEntries(result.entries, {scroll: true});
+    } else if (result.entries?.length) addEntries(result.entries, {scroll: true, animate: true});
     else if (result.notes) showWords("Saved notes\n" + (result.notes.join("\n") || "[ EMPTY ]"));
     else if (result.source === "research") {
       const sources = result.sources.map(source => "- " + source.title + " (" + source.domain + ")");
@@ -405,6 +429,7 @@ async function runTask(action, {label, human = false, forgot = false} = {}) {
   } finally {
     if (generation === state.generation) {
       state.busy = false;
+      state.lastInteraction = performance.now();
       setControls();
       refreshJournal();
     }
@@ -433,7 +458,9 @@ function command(input) {
     }
   } else if (input.startsWith("/remember ")) {
     runTask(() => jsonTask("/v1/memory", {text: input.slice(10)}));
-  } else if (["art", "sermon", "ritual", "bless"].includes(action)) {
+  } else if (interludeTypes.includes(action)) {
+    openInterlude(action === "interlude" ? null : action);
+  } else if (["sermon", "ritual", "bless"].includes(action)) {
     const rite = action === "bless" ? "ritual" : action;
     runTask(() => jsonTask("/v1/" + rite, {want_audio: voice.checked}), {label: `Preparing a little ${rite} ...`});
   } else {
@@ -491,11 +518,42 @@ async function talk() {
 
 function quietHour() {
   const hour = new Date().getHours();
-  return hour >= 22 || hour < 8;
+  const [start,end] = state.quietHours || [22,8];
+  return start === end ? false : start < end ? hour >= start && hour < end : hour >= start || hour < end;
 }
 
 function nextRite() {
   return Date.now() + 600_000 + Math.random() * 600_000;
+}
+
+function dismissInterlude() {
+  const view = state.interlude;
+  state.interlude = null;
+  view?.close();
+  $("interlude").hidden = true;
+  state.nextInterlude = performance.now()+1800_000+Math.random()*3600_000;
+}
+
+async function openInterlude(kind = null, manual = true) {
+  if (!state.unlocked || state.busy || state.recorder || state.opening || state.interludeRequest || player.paused === false) return;
+  const generation = state.generation, interacted = state.lastInteraction;
+  state.interludeRequest = true;
+  try {
+    const packet = await request("/v1/interlude"+(kind ? "?type="+encodeURIComponent(kind) : ""));
+    if (generation !== state.generation || !state.unlocked || state.busy || state.recorder || state.opening
+        || player.paused === false || !manual && state.lastInteraction !== interacted) return;
+    dismissInterlude(); finishAllTyping();
+    $("interlude").hidden = false;
+    state.interlude = new InterludeView($("interlude-stage"),packet, {
+      reduced: reducedMotion?.matches || false, onClose: () => {
+        state.interlude = null; $("interlude").hidden = true;
+        state.lastInteraction = performance.now();
+        state.nextInterlude = performance.now()+1800_000+Math.random()*3600_000;
+      }
+    });
+  } catch (error) {
+    if (manual && generation === state.generation) notice("chat-status","[ AUSPEX ] The little local link is quiet. Try again shortly.");
+  } finally { state.interludeRequest = false; }
 }
 
 $("gate-form").addEventListener("submit", event => {
@@ -523,12 +581,23 @@ document.addEventListener("keydown", event => {
     if (!event.repeat) talk();
   }
 });
+for (const name of ["keydown","pointerdown","pointermove"]) document.addEventListener(name,event => {
+  state.lastInteraction = performance.now();
+  if (name !== "pointermove" && state.interlude && !$("interlude").contains(event.target)) dismissInterlude();
+});
+reducedMotion?.addEventListener("change",() => { if (reducedMotion.matches) { finishAllTyping(); dismissInterlude(); } });
 $("idle").addEventListener("change", () => { state.nextRite = nextRite(); });
 setInterval(() => {
   if (!state.unlocked) return;
   refreshJournal();
   refreshTelemetry();
-  if ($("idle").checked && document.visibilityState === "visible" && !quietHour() && Date.now() >= state.nextRite) {
+  const idle = performance.now()-state.lastInteraction >= 120_000;
+  const available = !state.busy && !state.opening && !state.recorder && !state.interlude && !state.interludeRequest && player.paused !== false;
+  if ($("idle").checked && document.visibilityState === "visible" && state.tab !== "admin" && !quietHour() && idle && available
+      && performance.now() >= state.nextInterlude) {
+    state.nextInterlude = performance.now()+1800_000+Math.random()*3600_000;
+    openInterlude(null,false);
+  } else if ($("idle").checked && document.visibilityState === "visible" && !quietHour() && idle && available && Date.now() >= state.nextRite) {
     runTask(() => jsonTask("/v1/ritual"), {label: "A tiny idle rite ..."});
   }
 }, 10_000);

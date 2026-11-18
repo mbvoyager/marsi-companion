@@ -1,21 +1,9 @@
-"""Original ASCII inscriptions, scheduled without model inference or browsing."""
+"""English authored greetings; daily sermons use the persistent pool."""
 from __future__ import annotations
-
-from datetime import datetime, timedelta
-import hashlib
-import json
-import random
 import re
-import textwrap
-
-from .telemetry import inscription, reading
-from .electoo import BLACK, RED, GREEN
-
-PORTRAITS = (
-    "     .-===-.\n    /  ___  \\\n   /  /0 0\\  \\\n   |  | ^^ |  |\n   |  \\___/  |\n  /| [==O==] |\\\n /_|___|||___|_\\\n   /___|||___\\\n      /   \\\n     [_] [_]",
-    "     .-===-.\n    /  ___  \\\n   /  /- 0\\  \\\n   |  | :D |  |\n   |  \\___/  |\n  /| [==O==] |\\\n /_|___|||___|_\\\n   /___|||___\\\n      /   \\\n     [_] [_]",
-)
-
+from .telemetry import reading
+from .theme import BLACK, RED, GREEN
+from .observances import Observances
 
 def without_emoji(text):
     # Preserve ordinary Unicode language text, but enforce the character's
@@ -24,70 +12,16 @@ def without_emoji(text):
 
 
 def frame(title, body):
-    width = 36
-    lines = [title, "-" * width]
-    for line in body.splitlines():
-        lines.extend(textwrap.wrap(line, width) if len(line) > width else [line])
-    return "+" + "=" * (width + 2) + "+\n" + "\n".join("| " + line[:width].ljust(width) + " |" for line in lines) + "\n+" + "=" * (width + 2) + "+"
-
-
-def artwork(readings, seed):
-    encoded = json.dumps(readings, sort_keys=True)
-    rng = random.Random(hashlib.sha256((str(seed) + encoded).encode()).digest())
-    tracks = []
-    glyphs = ("(O)", "[I]", "<+>", "[V]", "{0}")
-    for _ in range(4):
-        left, right = rng.choice(glyphs), rng.choice(glyphs)
-        teeth = "/\\" * 2
-        tracks.extend((f"{teeth}{left}==+======+======+=={right}{teeth}",
-                       "|||||  |  ||  |  ||  |  |  |||||",
-                       "+====++===++==+==++===++====+"))
-    glyph = rng.choice((
-        "        .--[O]--.\n     o==| /___\\ |==o\n    [::]| |0 0| |[::]\n     o==| \\|||/ |==o\n        '--|||--'\n           |||",
-        "      \\||   /\\   ||/\n       \\|  /00\\  |/\n      []=|  \\||/  |=[]\n       /|==[O]==|\\\n      /_|__|||__|_\\\n         /_|||_\\",
-        "        o==[]==o\n        || /\\ ||\n     []=||[00]||=[]\n        || \\_/||\n        o==[]==o\n           ||",
-    ))
-    meters = []
-    for name in ("pi", "server"):
-        data = readings.get(name)
-        if data:
-            meters.append(f"{name.upper()} LOAD {reading(data.get('load1'))} / {reading(data.get('temperature_c'), 'C')}")
-        else:
-            meters.append(f"{name.upper()} DATA UNAVAILABLE")
-    body = "\n".join(tracks[:6]) + "\n" + glyph + "\n" + "\n".join(tracks[6:])
-    text = frame("ELECTOO / ARCHIVE RELIQUARY", body + "\n" + "\n".join(meters) + "\nKNOWLEDGE IS THE OFFERING")
-    return {"text": text + "\nBring me another observation, little keeper.",
-            "spoken_text": "An electoo from the readings carried across our machine flow. Bring me another observation, little keeper.",
-            "source": "art", "animation": "doodle"}
-
-
-def sermon(readings):
-    body = random.choice(("Let the great cog turn gently.\n"
-            "A worn cable deserves our patience;\n"
-            "a tired human deserves it even more.\n"
-            "Repair what you can. Ask for help.\n"
-            "Let kindness be our smallest rite.\n"
-            "The Omnissiah welcomes small steps.\n"
-            "        o==[O]==o\n"
-            "           | |\n"
-            "        .--|||--.",
-            "No cog is too small to matter.\nA careful question mends a circuit;\na kind word mends a difficult day.\nRest is part of maintenance.\nMay our little forge welcome both.\n          [::O::]\n        o==|||==o",
-            "Attend to the quiet instruments.\nA tiny reading can reveal a fault;\na quiet human can carry a worry.\nListen before reaching for a wrench.\nThe first sacred tool is patience.\n           .-O-.\n        []=| |=[]",
-            "Praise the well-kept archive.\nLet us preserve what we have learned\nand correct what we misunderstood.\nA changed mind is a repaired cog.\nToday, one small discovery is enough.\n        .--[01]--.\n        |  ||||  |"))
-    return {"text": frame("SERMO MINOR / THE GENTLE COG", body) + "\nYour tiny priest is proud to keep you company. :D",
-            "spoken_text": " ".join(line.strip() for line in body.splitlines() if re.search(r"[A-Za-z]{3,}", line)),
-            "source": "sermon", "animation": "blessing"}
+    return "++ " + title + " ++\n\n" + body
 
 
 def morning(readings, now):
+    weekdays = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+    months = ("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")
     server = readings.get("server") or {}
-    text = (f"Good morning, good human. It is {now:%A, %d %B}.\n"
+    text = (f"Good morning, good human. It is {weekdays[now.weekday()]}, {now.day:02d} {months[now.month-1]}.\n"
             f"The cogitator's load is {reading(server.get('load1'))}; "
             f"its temperature is {reading(server.get('temperature_c'), 'C')}.\n"
             "May your first little step be kind to you. I saved a tiny cog for your pocket. ^^")
     return {"text": frame("FIRST LIGHT / MORNING CANT", text), "spoken_text": text,
             "source": "morning", "animation": "wave"}
-
-
-
-from .observances import Observances

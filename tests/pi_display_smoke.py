@@ -8,8 +8,8 @@ import tkinter as tk
 from tkinter import font as tkfont
 from unittest.mock import Mock, patch
 
-from marsi_local.liturgy import BLACK, GREEN, RED, artwork
-from marsi_local.electoo import BONE, BRASS
+from marsi_local.theme import BLACK, GREEN, RED
+from marsi_local.theme import BONE, BRASS
 from marsi_local.pi import Display
 from marsi_local.audio import AudioError
 
@@ -19,8 +19,8 @@ class PreviewClient:
 
     def __init__(self):
         self.chat = Mock(return_value={"text": "A kind little cog. ^^", "source": "system"})
-        self.art = Mock(return_value=artwork({"server": {"load1": 0.42, "temperature_c": 43.0}}, "preview"))
-        self.sermon = self.ritual = self.art
+        self.sermon = Mock(return_value={"text": "++ SERMO MINOR // ON SPARE SCREWS ++\n\nA spare screw appeared after the repair.\nI have appointed it supervisor.\nIt has already improved the silence.", "source": "sermon"})
+        self.ritual = self.sermon
 
     def telemetry(self, readings):
         return {"pi": readings, "server": None}
@@ -53,9 +53,24 @@ def canvas_image(canvas):
             draw.polygon(list(zip(coords[::2], coords[1::2])), fill=color or None, outline=outline or None)
         elif kind == "text":
             actual = tkfont.Font(font=canvas.itemcget(item, "font")).actual()
-            pixels = round(canvas.winfo_fpixels(f"{actual['size']}p"))
+            pixels = abs(actual["size"]) if actual["size"] < 0 else round(canvas.winfo_fpixels(f"{actual['size']}p"))
             face = ImageFont.truetype("C:/Windows/Fonts/cour.ttf", max(6, pixels))
-            draw.multiline_text(canvas.bbox(item)[:2], canvas.itemcget(item, "text"),
+            value = canvas.itemcget(item, "text")
+            width = float(canvas.itemcget(item,"width"))
+            if width:
+                measured = tkfont.Font(font=canvas.itemcget(item,"font"))
+                wrapped = []
+                for paragraph in value.split("\n"):
+                    line = ""
+                    for word in paragraph.split(" "):
+                        candidate = line+(" " if line else "")+word
+                        if line and measured.measure(candidate) > width:
+                            wrapped.append(line); line = word
+                        else:
+                            line = candidate
+                    wrapped.append(line)
+                value = "\n".join(wrapped)
+            draw.multiline_text(canvas.bbox(item)[:2], value,
                                 fill=color, font=face, spacing=0)
     return layer
 
@@ -94,7 +109,7 @@ def render_windows(root, destination):
                 draw = ImageDraw.Draw(layer)
                 def font(spec):
                     actual = tkfont.Font(font=spec).actual()
-                    pixels = round(root.winfo_fpixels(f"{actual['size']}p"))
+                    pixels = abs(actual["size"]) if actual["size"] < 0 else round(root.winfo_fpixels(f"{actual['size']}p"))
                     return ImageFont.truetype("C:/Windows/Fonts/cour.ttf", max(6, pixels))
                 if isinstance(widget, tk.Text):
                     face = font(widget.cget("font"))
@@ -144,7 +159,7 @@ with tempfile.TemporaryDirectory() as state:
         display.receive_entries([
             {"id": 1, "at": now, "kind": "chat", "role": "human", "text": "Where are you, MARSI?"},
             {"id": 2, "at": now, "kind": "chat", "role": "marsi", "text": "Beneath a forge cathedral on Mars, little keeper. The machine flow carries your Terra's words into my reliquary. What have you observed today?"},
-            {"id": 3, "at": now, "kind": "art", "role": "marsi", "text": client.art()["text"]},
+            {"id": 3, "at": now, "kind": "sermon", "role": "marsi", "text": client.sermon()["text"]},
         ], initial=True)
         display.polling = True
         display.link_online = True
@@ -160,7 +175,7 @@ with tempfile.TemporaryDirectory() as state:
                 # Tk's layout pass. Repaint at that settled size before checking
                 # that subsequent animation frames reuse the static artwork.
                 display.draw(123.4)
-                assert display.electoos[-1].key == (display.canvas.winfo_width(), display.canvas.winfo_height())
+                assert display.effigy.key == (display.canvas.winfo_width(), display.canvas.winfo_height())
                 assert display.canvas.find_all(), "ASCII character should be visible"
                 assert display.reply.winfo_height() > 100, "Archive must remain useful"
                 assert display.talk.winfo_viewable(), "Talk must be visible"
@@ -174,11 +189,11 @@ with tempfile.TemporaryDirectory() as state:
                 assert display.reply.tag_cget("human", "foreground") == GREEN
                 assert display.reply.tag_cget("marsi", "foreground") == BONE
                 ids = display.canvas.find_all()
-                signals = [display.canvas.coords(item) for item in display.electoos[-1].signals]
+                signals = [display.canvas.coords(item) for item in display.effigy.signals]
                 display.draw(124.4)
                 assert display.canvas.find_all() == ids, "Static artwork should be cached on the Pi"
-                assert signals != [display.canvas.coords(item) for item in display.electoos[-1].signals], "Signals should move"
-            adept = display.electoos[-1]
+                assert signals != [display.canvas.coords(item) for item in display.effigy.signals], "Signals should move"
+            adept = display.effigy
             adept.draw(11.3, "idle")
             assert all(display.canvas.itemcget(eye["items"][0], "state") == "hidden" for eye in adept.eyes), "The lenses must actually blink"
             adept.draw(12.3, "idle")
@@ -207,7 +222,7 @@ with tempfile.TemporaryDirectory() as state:
                 render_windows(root, destination / f"terminal-pending-{width}x{height}.png")
                 display.finish_transmission({"entries": [{"role": "human"}]})
         if os.getenv("MARSI_RENDER_DIR") and os.name == "nt":
-            from marsi_local.electoo import Electoo
+            from marsi_local.effigy import Effigy
             portrait = tk.Toplevel(root)
             portrait.withdraw()
             portrait.geometry("320x370-20000+0")
@@ -215,7 +230,7 @@ with tempfile.TemporaryDirectory() as state:
             canvas.pack(fill="both", expand=True)
             portrait.deiconify()
             root.update()
-            adept = Electoo(canvas, display.mono, "effigy")
+            adept = Effigy(canvas, display.mono, "effigy")
             frames = []
             for i in range(56):
                 mode = ("idle", "listening", "thinking", "speaking")[i//14]
@@ -242,12 +257,12 @@ with tempfile.TemporaryDirectory() as state:
         display.worker(Mock(side_effect=AudioError("PortAudio test capture failure")), False)
         display.tick()
         assert "PortAudio test capture failure" in display.reply.get("1.0", "end"), "Capture errors must identify the audio layer"
-        client.art.reset_mock()
+        client.sermon.reset_mock()
         display.start_task = Mock()
-        display.input.insert(0, "art")
+        display.input.insert(0, "sermon")
         display.send_text()
         display.start_task.call_args.args[0]()
-        client.art.assert_called_once()
+        client.sermon.assert_called_once()
         client.chat.assert_not_called()
         display.start_task.reset_mock()
         display.input.insert(0, "Tell me about art")

@@ -1,4 +1,6 @@
-const PALETTE = ["#9fbf97", "#bca273", "#da7769", "#d8cbb0"];
+// Older servers have no style field; current servers supply all tokens from
+// cogitator.json, including persistent registry order and explicit colours.
+const PALETTE = ["#ffb000", "#e5d9bd", "#ee8779", "#bca16d"];
 const DASHES = [[], [6, 3], [2, 3], [7, 3, 2, 3]];
 const STATES = {fresh: "FRESH", stale: "STALE READING", waiting: "WAITING FOR DATA"};
 const CONNECTIONS = {connected: "CONNECTED", lost: "SIGNAL LOST", waiting: "AWAITING SIGNAL", unknown: "SIGNAL UNKNOWN"};
@@ -9,7 +11,22 @@ const clock = new Intl.DateTimeFormat("en-GB", {hour: "2-digit", minute: "2-digi
 const day = new Intl.DateTimeFormat("en-GB", {day: "2-digit", month: "2-digit"});
 
 function color(sensor, index) {
+  if (/^#[0-9a-f]{6}$/i.test(sensor.style?.color || "")) return sensor.style.color;
   return /^#[0-9a-f]{6}$/i.test(sensor.color || "") ? sensor.color : PALETTE[index % PALETTE.length];
+}
+
+function style(sensor, index) {
+  return sensor.style || {color: color(sensor,index), shape: ["circle","diamond","square","triangle"][index % 4], dash: DASHES[index % 4]};
+}
+
+function marker(ctx, x, y, identity, radius=3.5) {
+  ctx.fillStyle = identity.color;
+  ctx.beginPath();
+  if (identity.shape === "circle") ctx.arc(x,y,radius,0,Math.PI*2);
+  else if (identity.shape === "square") ctx.rect(x-radius,y-radius,radius*2,radius*2);
+  else if (identity.shape === "diamond") { ctx.moveTo(x,y-radius); ctx.lineTo(x+radius,y); ctx.lineTo(x,y+radius); ctx.lineTo(x-radius,y); }
+  else { ctx.moveTo(x,y-radius); ctx.lineTo(x+radius,y+radius); ctx.lineTo(x-radius,y+radius); }
+  ctx.closePath(); ctx.fill();
 }
 
 function text(tag, value, className) {
@@ -273,7 +290,7 @@ export class ClimateView {
       tile.style.setProperty("--sensor", color(sensor, index));
       const head = text("div", "", "card-header");
       const title = text("h3", sensor.name);
-      const cog = text("span", "+O+", "card-cog");
+      const cog = text("span", "", "sensor-mark " + style(sensor,index).shape);
       cog.setAttribute("aria-hidden", "true");
       title.prepend(cog);
       head.append(title, text("span", sensor.location === "outdoor" ? "[ OUTDOOR ]" : "[ INDOOR ]", "badge"));
@@ -304,7 +321,7 @@ export class ClimateView {
 
   renderLegend() {
     const states = new Map((this.snapshot?.sensors || []).map(sensor => [sensor.id, sensor.status]));
-    const series = (this.history?.sensors || []).map(({id, name, location, color}) => ({id, name, location, color, state: states.get(id)}));
+    const series = (this.history?.sensors || []).map(({id, name, location, color, style}) => ({id, name, location, color, style, state: states.get(id)}));
     const key = JSON.stringify(series);
     if (key === this.legendKey) return;
     this.legendKey = key;
@@ -316,7 +333,11 @@ export class ClimateView {
       button.setAttribute("aria-pressed", !this.hiddenSensors.has(sensor.id));
       const swatch = text("span", "", "swatch");
       swatch.style.color = color(sensor, index);
-      if (DASHES[index % DASHES.length].length) swatch.style.borderTopStyle = "dashed";
+      if (style(sensor,index).dash.length) swatch.style.borderTopStyle = "dashed";
+      const symbol = text("span", "", "sensor-mark " + style(sensor,index).shape);
+      symbol.style.setProperty("--sensor", color(sensor,index));
+      symbol.setAttribute("aria-hidden", "true");
+      button.prepend(symbol);
       button.prepend(swatch);
       button.addEventListener("click", () => {
         if (this.hiddenSensors.has(sensor.id)) this.hiddenSensors.delete(sensor.id);
@@ -415,7 +436,7 @@ export class ClimateView {
     for (const {sensor, index, points} of lines) {
       ctx.strokeStyle = ctx.fillStyle = color(sensor, index);
       ctx.lineWidth = 2;
-      ctx.setLineDash(DASHES[index % DASHES.length]);
+      ctx.setLineDash(style(sensor,index).dash);
       ctx.beginPath();
       for (let i = 0; i < points.length; i++) {
         const [at, value] = points[i];
@@ -423,6 +444,10 @@ export class ClimateView {
         else ctx.moveTo(x(at), y(value));
       }
       ctx.stroke();
+      if (points.length) {
+        const [at,value] = points.at(-1);
+        marker(ctx,x(at),y(value),style(sensor,index));
+      }
       for (let i = 0; i < points.length; i++) {
         const [at, value] = points[i];
         if ((i === 0 || at - points[i - 1][0] >= gap) && (i + 1 === points.length || points[i + 1][0] - at >= gap)) {
@@ -446,10 +471,7 @@ export class ClimateView {
     ctx.stroke();
     const summaries = lines.filter(line => line.points.length).map(({sensor, index, points}) => {
       const [time, value] = closest(points, at);
-      ctx.fillStyle = color(sensor, index);
-      ctx.beginPath();
-      ctx.arc(x(time), y(value), 4, 0, Math.PI * 2);
-      ctx.fill();
+      marker(ctx,x(time),y(value),style(sensor,index),4);
       return `${sensor.name} ${number.format(value)} (${dateTime.format(time)})`;
     });
     readout.textContent = summaries.join("  /  ");

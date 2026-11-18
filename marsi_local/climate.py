@@ -18,6 +18,7 @@ from uuid import uuid4
 
 from .config import ServerConfig, load_env
 from .core import Memory, ServiceError
+from .theme import sensor_style
 
 LOG = logging.getLogger(__name__)
 METRIC_RANGES = {
@@ -75,9 +76,11 @@ class RegisteredSensor:
     ieee_address: str | None = None
     hidden: bool = False
     detached: bool = False
+    style_index: int = 0
 
     def public(self, sensor_id):
-        return {"id": sensor_id, **asdict(self.details)}
+        public = {"id": sensor_id, **asdict(self.details)}
+        return {**public, "style": sensor_style(public, self.style_index)}
 
 
 @dataclass(frozen=True)
@@ -143,11 +146,11 @@ def registry_imported(db):
 
 def registered_sensors(db):
     rows = db.execute("""
-        SELECT id, name, location, color, room, topic, ieee_address, hidden, detached
+        SELECT id, name, location, color, room, topic, ieee_address, hidden, detached, rowid-1
         FROM climate_sensors ORDER BY rowid
     """)
-    return {sensor_id: RegisteredSensor(Sensor(name, location, color, room), topic, ieee, bool(hidden), bool(detached))
-            for sensor_id, name, location, color, room, topic, ieee, hidden, detached in rows}
+    return {sensor_id: RegisteredSensor(Sensor(name, location, color, room), topic, ieee, bool(hidden), bool(detached), index)
+            for sensor_id, name, location, color, room, topic, ieee, hidden, detached, index in rows}
 
 
 def seed_sensors(config):

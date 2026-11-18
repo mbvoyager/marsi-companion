@@ -1,13 +1,5 @@
 :root {
   color-scheme: dark;
-  --black: #090708;
-  --panel: #191010;
-  --red: #b34d43;
-  --rust: #da7769;
-  --green: #9fbf97;
-  --bone: #d8cbb0;
-  --brass: #bca273;
-  --dim: #4b332f;
   font-family: "Liberation Mono", "Courier New", monospace;
   line-height: 1.4;
   background: var(--black);
@@ -49,7 +41,6 @@ input::placeholder { color: var(--brass); opacity: 1; }
 input[type="checkbox"] { accent-color: var(--green); }
 
 .masthead { border-bottom: 1px solid var(--dim); }
-.electoo { display: block; background: #211313; }
 .masthead-row, .sensorium-header {
   display: flex;
   align-items: center;
@@ -104,7 +95,6 @@ input[type="checkbox"] { accent-color: var(--green); }
 .chat-actions label { padding-right: .35rem; color: var(--green); }
 audio { width: min(100%, 26rem); margin-top: .55rem; }
 .relic { padding: .7rem; text-align: center; }
-.portrait { color: var(--rust); font-size: clamp(.6rem, 1.1vw, .88rem); margin: 1.25rem 0; line-height: 1.3; text-shadow: 0 0 .5rem #b34d4350; }
 .telemetry { color: var(--green); white-space: pre-wrap; text-align: left; margin-top: 1rem; font-size: .82rem; }
 
 .sensorium { padding-bottom: .7rem; }
@@ -164,4 +154,81 @@ audio { width: min(100%, 26rem); margin-top: .55rem; }
   .journal { height: clamp(14rem, 46vh, 28rem); }
   .controls { gap: .28rem; }
   button { padding-inline: .45rem; }
+}
+
+/* Original cogitator chrome. Numeric readings remain calm and high contrast. */
+body { display: grid; grid-template-columns: 10.5rem minmax(0,1fr); grid-template-rows: auto auto 1fr auto; font-size: var(--type-body); }
+.masthead { display: contents; }
+.masthead-row { grid-column: 1 / -1; border-bottom: 3px double var(--dim); padding-block: .8rem; }
+.brand { display: flex; gap: .7rem; align-items: center; min-width: 0; }
+.emblem { width: 42px; height: 42px; color: var(--brass); flex: 0 0 42px; }
+.machine-status { grid-column: 1 / -1; display: flex; justify-content: space-between; flex-wrap: wrap; gap: .4rem; padding: .45rem 1rem; font-size: .75rem; color: var(--brass); border-bottom: 1px solid var(--dim); }
+#machine-services[data-state="live"] { color: var(--green); }
+#machine-services[data-state="error"] { color: var(--rust); }
+.masthead nav { grid-column: 1; grid-row: 3; flex-direction: column; align-items: stretch; padding: .8rem .5rem; border-right: 1px solid var(--dim); }
+.masthead nav button { text-align: left; }
+.masthead nav .end { margin: 1rem 0 0; }
+main { grid-column: 2; grid-row: 3; min-width: 0; position: relative; }
+body:has(#navigation[hidden]) main { grid-column: 1 / -1; }
+footer { grid-column: 1 / -1; border-color: var(--dim); }
+.telemetry { color: var(--muted); font-size: .75rem; overflow-wrap: anywhere; }
+.panel { position: relative; border-color: var(--dim); border-width: var(--layout-frame); padding: var(--layout-inset); background: var(--panel); box-shadow: inset 0 0 0 4px var(--panel), inset 0 0 0 5px #30271c; clip-path: polygon(9px 0,calc(100% - 9px) 0,100% 9px,100% calc(100% - 9px),calc(100% - 9px) 100%,9px 100%,0 calc(100% - 9px),0 9px); }
+.panel::before, .panel::after { content: ""; position: absolute; width: 3px; height: 3px; background: var(--brass); top: 8px; left: 8px; pointer-events: none; }
+.panel::after { inset: auto 8px 8px auto; }
+.chat-layout { display: block; }
+.journal { background: repeating-linear-gradient(0deg, #ffb00005 0 1px, var(--black) 1px 5px); border-color: var(--dim); padding: .65rem; }
+.entry.marsi { border-left: 2px solid var(--amber); padding-left: .8rem; }
+.entry.human .words { color: var(--bone); }
+.entry .words { min-width: 0; }
+.entry .stamp { margin-bottom: .3rem; }
+.entry progress { accent-color: var(--amber); }
+.entry progress::-webkit-progress-value { background: var(--amber); }
+button { min-height: var(--layout-touch); background: var(--raised); border-color: var(--dim); }
+button:hover, button[aria-pressed="true"] { background: #2b2011; color: var(--amber); border-color: var(--amber); }
+:focus-visible { outline-color: var(--amber); }
+input:not([type="checkbox"]) { border-color: var(--dim); color: var(--bone); min-height: var(--layout-touch); font-size: 16px; }
+input[type="checkbox"] { accent-color: var(--amber); }
+.chat-actions label { color: var(--brass); min-height: 44px; display: inline-flex; align-items: center; }
+#chat-form { flex-wrap: wrap; }
+#message { min-width: 8rem; }
+#send { color: var(--amber); border-color: var(--amber); }
+h2 { font-size: 1rem; color: var(--amber); letter-spacing: .04em; }
+.sensorium-header { border-bottom: 1px solid var(--dim); margin: 0 .65rem .65rem; padding: .65rem 0; }
+.sensor-card { background: var(--black); border-top: 1px solid var(--dim); border-left: 2px solid var(--sensor); }
+.reading { color: var(--amber); font-size: var(--type-reading); text-shadow: none; }
+.sensor-mark { display: inline-block; vertical-align: .05em; width: 9px; height: 9px; background: var(--sensor); margin-right: .6rem; flex: 0 0 9px; }
+.sensor-mark.circle { border-radius: 50%; }
+.sensor-mark.diamond { transform: rotate(45deg); width: 8px; height: 8px; }
+.sensor-mark.triangle { clip-path: polygon(50% 0,100% 100%,0 100%); }
+.legend button { min-height: 44px; gap: .35rem; }
+.legend .sensor-mark { margin-right: 0; }
+.chart { background: var(--black); }
+.admin-block { background: var(--black); }
+#admin-delete, #admin-unpair, #admin-hide, #admin-confirm, .admin-table button { border-color: var(--rust); color: var(--rust); }
+#admin-dialog { clip-path: none; }
+.interlude { position: absolute; z-index: 10; inset: .65rem; background: var(--black); }
+#interlude-stage { width: 100%; }
+#interlude-stage canvas { width: 100%; height: max(440px,min(70vh,560px)); display: block; touch-action: manipulation; }
+#interlude-stage > button { margin-top: .4rem; width: 100%; }
+@media (max-width: 680px) {
+  body { display: block; }
+  .masthead { display: block; }
+  .masthead nav { flex-direction: row; align-items: center; border-right: 0; padding: .6rem; }
+  .masthead nav button { flex: 1; text-align: center; }
+  .masthead nav .end { margin: 0; flex: 0; }
+  .masthead nav .telemetry { display: none; }
+  .masthead-row { gap: .5rem; }
+  .machine-status { font-size: .7rem; padding-inline: .65rem; }
+  .journal { height: clamp(18rem,53vh,32rem); }
+  #chat-form > span { display: none; }
+  #message { flex-basis: 100%; width: 100%; }
+  #send, #talk { flex: 1; }
+  .sensorium-header { flex-direction: column; align-items: start; }
+  .panel { padding: .6rem; }
+  .range, .sensorium > .message, .sensor-grid, #history { margin-inline: .35rem; }
+  .admin-fields { grid-template-columns: minmax(0,1fr); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .journal { background: var(--black); }
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }

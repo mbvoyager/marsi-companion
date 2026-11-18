@@ -12,6 +12,7 @@ from .config import load_env, validate_url
 from .core import clean_text, session_name
 from .speech import MAX_AUDIO_BYTES
 from .transmission import REPLY_STREAM_TYPE, RESEARCH_PROGRESS
+from .interludes import TYPES
 
 MAX_REPLY = 12_000_000
 
@@ -45,7 +46,7 @@ class Client:
         else:
             body = None
         request = urllib.request.Request(self.url + path, data=body, headers=headers, method=method)
-        quick_request = path == "/health" or path.startswith(("/v1/telemetry", "/v1/journal", "/v1/climate/"))
+        quick_request = path == "/health" or path.startswith(("/v1/telemetry", "/v1/journal", "/v1/climate/", "/v1/interlude", "/v1/status"))
         timeout = min(self.timeout, 5) if quick_request else self.timeout
         try:
             with self.http.open(request, timeout=timeout) as response:
@@ -104,9 +105,6 @@ class Client:
 
     def remember(self, text: str):
         return self.request("/v1/memory", {"session_id": self.session, "text": clean_text(text, 200)})
-
-    def art(self, speak=False):
-        return self.request("/v1/art", {"session_id": self.session, "want_audio": speak})
 
     def sermon(self, speak=False):
         return self.request("/v1/sermon", {"session_id": self.session, "want_audio": speak})
@@ -168,12 +166,13 @@ class Client:
 def command(text):
     """Exact local commands; sentences containing their words remain conversation."""
     name = text.strip().lower().lstrip("/")
-    return {"art": "art", "exit": "exit", "quit": "exit", "sermon": "sermon",
+    return {**{kind: kind for kind in TYPES}, "interlude": "interlude", "exit": "exit", "quit": "exit", "sermon": "sermon",
             "ritual": "ritual", "bless": "ritual", "notes": "notes", "history": "history",
             "help": "help", "forget": "forget"}.get(name)
 
 
-HELP = ("art | sermon | bless | history | /remember TEXT | /notes | /forget | exit\n"
+HELP = ("sermon | bless | history | /remember TEXT | /notes | /forget | exit\n"
+        "/auspex | /vox | /servitor | /hololith | /codex | /noosphere | /interlude\n"
         "/research QUESTION (voice: Marsi research, QUESTION)\n"
         "Display: F8 = Talk/Finish; Escape = window; Ctrl+Q = exit.")
 
@@ -208,7 +207,11 @@ def main():
                     for entry in client.journal()["entries"]:
                         print(f"[{entry['at']}] {entry['role']} > {entry['text']}")
                 else:
-                    task = {"art": client.art, "sermon": client.sermon, "ritual": client.ritual}.get(action)
+                    if action in TYPES or action == "interlude":
+                        packet = client.interlude(None if action == "interlude" else action)
+                        print("COGITATOR // " + packet["type"].upper() + "\n" + json.dumps(packet["data"], indent=2))
+                        continue
+                    task = {"sermon": client.sermon, "ritual": client.ritual}.get(action)
                     result = task() if task else client.chat(text)
                     print("Marsi > " + result["text"])
                     for source in result.get("sources", []):

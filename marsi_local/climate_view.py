@@ -1,4 +1,4 @@
-"""The Pi's climate tab, drawn with the same electoos as the journal."""
+"""Read-only cogitator climate display, sharing sensor identities with the web."""
 from __future__ import annotations
 
 from datetime import datetime
@@ -6,12 +6,10 @@ from math import ceil, floor
 import threading
 
 from .client import ClientError
-from .electoo import BLACK, BONE, BRASS, DIM, GREEN, RED, Electoo
+from .theme import BLACK, BONE, BRASS, DIM, GREEN, RED, AMBER, PANEL, sensor_style
+from .chrome import cog, sensor_mark
 
 PERIODS = (("now", "Now"), ("3h", "3 h"), ("24h", "24 h"), ("7d", "7 days"))
-COLORS = (GREEN, BRASS, RED, BONE)
-DASHES = ((), (6, 3), (2, 3), (7, 3, 2, 3))
-PANEL = "#191010"
 SENSOR_STATES = {
     "fresh": ("FRESH", GREEN),
     "stale": ("STALE READING", RED),
@@ -51,11 +49,11 @@ class ClimateView:
             tab = button(bar, label, lambda key=key: self.select(key))
             tab.pack(side="left", padx=1)
             self.tabs[key] = tab
-        self.refresh_button = button(bar, "Refresh archive", self.refresh)
+        self.refresh_button = button(bar, "Refresh", self.refresh)
         self.refresh_button.pack(side="left", padx=4)
         self.status = tk.Label(bar, text="[ CONNECTING ]", bg=BLACK, fg=BRASS, font=(mono, -11), padx=4)
-        self.status.pack(side="right")
-        self.pages = tk.Frame(bar, bg=BLACK)
+        self.status.grid_forget()
+        self.pages = tk.Frame(self.frame, bg=BLACK)
         self.previous = button(self.pages, "<", lambda: self.turn_page(-1))
         self.previous.pack(side="left")
         self.page_label = tk.Label(self.pages, bg=BLACK, fg=BONE, font=(mono, -11), padx=3)
@@ -69,7 +67,6 @@ class ClimateView:
         self.canvas.grid(row=2, column=0, sticky="nsew")
         self.canvas.bind("<Configure>", self.invalidate)
         self.refresh_status = tk.Label(self.frame, bg=BLACK, fg=BRASS, font=(mono, -11))
-        self.cog = Electoo(self.canvas, mono)
         self.title_font = font.Font(root=parent, family=mono, size=-13, weight="bold")
         self.label_font = font.Font(root=parent, family=mono, size=-11)
         self.select("now")
@@ -95,7 +92,7 @@ class ClimateView:
     def refresh(self):
         self.refresh_button.configure(state="disabled")
         self.refresh_status.configure(text="Checking the archive ...")
-        self.refresh_status.grid(row=3, column=0, sticky="w", padx=5)
+        self.refresh_status.grid(row=4, column=0, sticky="w", padx=5)
         threading.Thread(target=self.fetch_current, daemon=True).start()
 
     def fetch_current(self):
@@ -154,7 +151,7 @@ class ClimateView:
         self.history_error = False
         self.history_at = 0
         for key, tab in self.tabs.items():
-            tab.configure(fg=GREEN if key == period else BONE, bg=PANEL if key == period else BLACK)
+            tab.configure(fg=AMBER if key == period else BONE, bg=PANEL if key == period else BLACK)
         self.invalidate()
 
     def turn_page(self, direction):
@@ -179,12 +176,12 @@ class ClimateView:
         self.page = min(max(0, self.page), count - 1)
         if count > 1:
             if not self.pages.winfo_manager():
-                self.pages.pack(side="right", padx=3)
+                self.pages.grid(row=3, column=0, sticky="e", padx=3)
             self.page_label.configure(text=f"{self.page + 1}/{count}")
             self.previous.configure(state="normal" if self.page > 0 else "disabled")
             self.next.configure(state="normal" if self.page < count - 1 else "disabled")
         else:
-            self.pages.pack_forget()
+            self.pages.grid_remove()
         start = self.page * size
         return list(enumerate(sensors[start:start + size], start=start))
 
@@ -205,7 +202,7 @@ class ClimateView:
         elif self.period != "now" and self.history:
             self.draw_charts(self.history, width, height)
         else:
-            self.pages.pack_forget()
+            self.pages.grid_remove()
             if self.feed_status in (404, 503):
                 message = "Check the climate archive on Ubuntu."
             elif self.feed_status == 401:
@@ -214,7 +211,7 @@ class ClimateView:
                 message = "Loading climate history ..." if not self.history_error else "Retrying climate history ..."
             else:
                 message = "Waiting for the climate archive ..."
-            self.cog.ring(width / 2, height / 2 - 17, 8, BRASS)
+            cog(c, width / 2, height / 2 - 17, 8, BRASS)
             c.create_text(width / 2, height / 2 + 9, text=message, fill=BONE, font=self.label_font)
 
     def draw_cards(self, sensors, width, height):
@@ -231,11 +228,12 @@ class ClimateView:
 
     def draw_card(self, sensor, index, x, y, w, h):
         c = self.canvas
-        accent = sensor.get("color") or COLORS[index % len(COLORS)]
+        style = sensor.get("style") or sensor_style(sensor, index)
+        accent = style["color"]
         c.create_rectangle(x, y, x + w, y + h, outline=DIM, fill=PANEL, tags="climate-card")
         c.create_line(x, y + 19, x, y, x + 21, y, fill=accent, width=2)
         c.create_line(x + w - 21, y + h, x + w, y + h, x + w, y + h - 14, fill=accent)
-        self.cog.ring(x + 13, y + 12, 4, accent, teeth=8)
+        sensor_mark(c, x + 13, y + 12, style, 4)
         location = "OUTDOOR" if sensor["location"] == "outdoor" else "INDOOR"
         name = sensor["name"] + (f" / {sensor['room']}" if sensor.get("room") else "")
         c.create_text(x + 24, y + 12, text=self.fit(name, w - 94, self.title_font),
@@ -246,7 +244,7 @@ class ClimateView:
         humidity = readings.get("humidity", {}).get("value")
         temp_text = "--" if temperature is None else f"{temperature:.1f}"
         humidity_text = "--" if humidity is None else f"{humidity:.1f}"
-        c.create_text(x + 10, y + 38, text=temp_text + " °C", anchor="w", fill=GREEN,
+        c.create_text(x + 10, y + 38, text=temp_text + " °C", anchor="w", fill=AMBER,
                       font=(self.mono, -28, "bold"), tags="climate-temperature")
         c.create_text(x + 11, y + 61, text=humidity_text + " % RH", anchor="w", fill=BONE,
                       font=(self.mono, -13), tags="climate-humidity")
@@ -280,8 +278,10 @@ class ClimateView:
         for position, (index, sensor) in enumerate(sensors):
             x = 9 + (position % columns) * column_width
             y = 12 + (position // columns) * 15
-            color = sensor.get("color") or COLORS[index % len(COLORS)]
-            self.canvas.create_line(x, y, x + 20, y, fill=color, width=2, dash=DASHES[index % len(DASHES)])
+            style = sensor.get("style") or sensor_style(sensor, index)
+            color = style["color"]
+            self.canvas.create_line(x, y, x + 20, y, fill=color, width=2, dash=style["dash"])
+            sensor_mark(self.canvas, x+10, y, style, 3)
             label = "OUTDOOR " if sensor["location"] == "outdoor" else ""
             if states.get(sensor["id"]) == "stale":
                 label += "STALE / "
@@ -325,17 +325,20 @@ class ClimateView:
                           fill=BONE, font=self.label_font)
         gap = (self.snapshot or {}).get("stale_after_ms", 7_200_000)
         for index, sensor in sensors:
-            color = sensor.get("color") or COLORS[index % len(COLORS)]
+            style = sensor.get("style") or sensor_style(sensor, index)
+            color = style["color"]
             coords, previous = [], None
             for at, value in sensor["series"][metric]:
                 if previous is not None and at - previous >= gap:
-                    self.trace(coords, color, DASHES[index % len(DASHES)])
+                    self.trace(coords, color, style["dash"])
                     coords = []
                 x = left + (at - start) / max(1, end - start) * (right - left)
                 y = bottom - (value - low) / (high - low) * (bottom - ceiling)
                 coords.extend((x, y))
                 previous = at
-            self.trace(coords, color, DASHES[index % len(DASHES)])
+            self.trace(coords, color, style["dash"])
+            if coords:
+                sensor_mark(c, *coords[-2:], style, 3, tags="climate-trace")
 
     def trace(self, coords, color, dash):
         if len(coords) == 2:

@@ -32,8 +32,7 @@ class Effigy:
     def effigy(self, w, h):
             c = self.canvas
             # Original chibi adept: an oversized hood, large optical lenses and
-            # mitten-like manipulators hugging a dataslate. The terminal's darker
-            # electoo bands keep their own palette and geometry.
+            # mitten-like manipulators hugging a dataslate. Original portrait geometry.
             scale = max(.01, min((w-10)/220, (h-18)/236))
             self.effigy_scale = scale
             ox, oy = w*.5, (h-236*scale)*.5-3

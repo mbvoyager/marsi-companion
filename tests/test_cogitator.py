@@ -3,9 +3,13 @@ from datetime import datetime, timezone
 import unittest
 
 from marsi_local.theme import css, definition, imperial_date, sensor_style
+from marsi_local.interlude_view import SceneRandom
 
 
 class ThemeTests(unittest.TestCase):
+    def test_scene_seed_matches_the_browser_sequence(self):
+        rng = SceneRandom(42)
+        self.assertEqual([rng.randrange(2**32) for _ in range(3)], [1083814273,378494188,2479403867])
     def test_css_and_tk_use_the_same_tokens(self):
         for name, color in definition()["colors"].items():
             self.assertIn(f"--{name}: {color}", css())

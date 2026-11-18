@@ -7,7 +7,7 @@ import unittest
 from unittest.mock import patch
 
 from marsi_local.drawn_pointer import load_xlib
-from marsi_local.electoo import GREEN
+from marsi_local.theme import GREEN
 from marsi_local.pointer import install_reticle
 
 

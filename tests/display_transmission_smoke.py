@@ -19,7 +19,7 @@ class DisplayTransmissionTests(unittest.TestCase):
         self.folder = tempfile.TemporaryDirectory()
         self.addCleanup(self.folder.cleanup)
         env = patch.dict(os.environ, {"MARSI_PI_STATE_DIR": self.folder.name,
-                                      "MARSI_RITUALS": "false", "MARSI_SPEAK": "false"})
+                                      "MARSI_RITUALS": "false", "MARSI_SPEAK": "false", "MARSI_TYPEWRITER": "false"})
         env.start()
         self.addCleanup(env.stop)
         self.root = tk.Tk()

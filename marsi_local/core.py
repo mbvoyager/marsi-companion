@@ -16,7 +16,7 @@ import urllib.request
 
 from .config import ROOT, ServerConfig, local_ollama_url
 from .demo import DemoPersona
-from .liturgy import Observances, artwork, sermon, without_emoji
+from .liturgy import Observances, without_emoji
 from .telemetry import Telemetry
 from .lore import Lore, reference_data, working_messages
 from .conversation import FOCUS, recover_history, repeats_answer, repeats_itself, words
@@ -277,16 +277,15 @@ RITUALS = (
     ("blessing", "May your cables be untangled and your snacks be plentiful. Praise the Omnissiah!"),
     ("inspect", "A missing reading is a question, little keeper. Bring me one observation when you have it; we shall seek its pattern."),
     ("wave", "A small salute for a good human. One little step counts as progress."),
-    ("doodle", "From the archive on Mars, an electoo for our machine flow. Knowledge is the offering; even a small datum deserves care."),
     ("inspect", "A temperature sensor would make a lovely little relic. If you ever add one, we could admire real readings together. ^^"),
 )
 
 
 def ritual(rng=None) -> dict:
     chooser = rng or random
-    animation, text = chooser.choice(RITUALS[:4])
+    animation, text = chooser.choice(RITUALS[:3])
     if chooser.random() < 0.03:
-        animation, text = RITUALS[4]
+        animation, text = RITUALS[3]
     return {"text": text, "animation": animation, "source": "ritual"}
 
 
@@ -563,10 +562,8 @@ class Companion:
                 "session_id": session, "entries": entries, "language_repaired": False}
 
     def inscription(self, session, kind):
+        if kind != "sermon":
+            raise ValueError("Only the daily sermon is an authored inscription")
         readings = self.telemetry.pair()
-        if kind == "sermon":
-            climate = self.tools.climate.current() if self.tools.climate is not None else None
-            return daily_sermon(self.memory, session, readings, climate)
-        result = artwork(readings, random.getrandbits(64)) if kind == "art" else sermon(readings)
-        self.memory.add_event(session, result)
-        return result
+        climate = self.tools.climate.current() if self.tools.climate is not None else None
+        return daily_sermon(self.memory, session, readings, climate)

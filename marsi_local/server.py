@@ -38,6 +38,8 @@ WEB_ASSETS = {
     "/web/recorder.js": ("recorder.js", "text/javascript; charset=utf-8"),
     "/web/theme.css": ("cogitator.json", "text/css; charset=utf-8"),
     "/web/theme.json": ("cogitator.json", "application/json; charset=utf-8"),
+    "/web/interludes.mjs": ("interludes.mjs", "text/javascript; charset=utf-8"),
+    "/web/typing.mjs": ("typing.mjs", "text/javascript; charset=utf-8"),
 }
 
 
@@ -301,7 +303,10 @@ class Handler(BaseHTTPRequestHandler):
                 app.telemetry.receive_pi(self.read_json().get("readings"))
                 return self.respond(200, app.telemetry.pair())
             if method == "GET" and path == "/v1/telemetry":
-                return self.respond(200, app.telemetry.pair())
+                climate = self.server.climate.current() if self.server.climate is not None else {}
+                return self.respond(200, {**app.telemetry.pair(), "imperial_date": imperial_date(),
+                                          "services": climate.get("services", {}),
+                                          "quiet_hours": [app.config.quiet_start, app.config.quiet_end]})
             if method == "GET" and path == "/v1/memory":
                 query = parse_qs(urlsplit(self.path).query)
                 session = session_name(query.get("session_id", ["pi"])[0])
@@ -309,7 +314,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self.respond(200, {"session_id": session, "notes": app.memory.notes(session)})
             if (method, path) not in (("POST", "/v1/chat"), ("POST", "/v1/voice"),
                                       ("POST", "/v1/ritual"), ("POST", "/v1/memory"),
-                                      ("POST", "/v1/art"), ("POST", "/v1/sermon"), ("POST", "/v1/speak"),
+                                      ("POST", "/v1/sermon"), ("POST", "/v1/speak"),
                                       ("POST", "/v1/voice-check"),
                                       ("DELETE", "/v1/session")):
                 raise ServiceError("Unknown endpoint.", 404)
@@ -346,7 +351,7 @@ class Handler(BaseHTTPRequestHandler):
                     # Diagnose actual speech without Qwen or a saved conversation.
                     text = clean_text(payload.get("text", VOICE_CHECK_TEXT), 300)
                     result = {"text": text, "source": "voice-check"}
-                elif path in ("/v1/art", "/v1/sermon"):
+                elif path == "/v1/sermon":
                     result = app.inscription(session, path.rsplit("/", 1)[1])
                 elif path == "/v1/speak":
                     # Read a persisted observance aloud; no arbitrary text or

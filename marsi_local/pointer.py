@@ -5,7 +5,7 @@ import logging
 import os
 from pathlib import Path
 
-from .electoo import GREEN, RED
+from .theme import GREEN, RED
 
 
 def install_reticle(root, *, drawn=False):

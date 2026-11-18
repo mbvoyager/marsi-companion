@@ -4,39 +4,29 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#090708">
-  <title>Marsi // Archivum Martis</title>
+  <title>Marsi // Cogitator Domus</title>
+  <link rel="stylesheet" href="/web/theme.css">
   <link rel="stylesheet" href="/web/marsi.css">
   <script type="module" src="/web/marsi.mjs"></script>
 </head>
 <body>
   <header class="masthead">
-    <svg class="electoo" width="100%" height="32" aria-hidden="true">
-      <defs>
-        <pattern id="cog-traces" width="112" height="32" patternUnits="userSpaceOnUse">
-          <g fill="none" stroke="#a68b5c">
-            <path d="M0 2H112M0 29H112" stroke="#b34d43"/>
-            <path d="M22 8H57L68 20H100M22 12H54L65 24H100M22 16H51L62 28H100"/>
-            <circle cx="12" cy="16" r="8"/><circle cx="12" cy="16" r="4"/>
-            <path d="M12 5v4m0 14v4M1 16h4m14 0h4M4 8l3 3m10 10 3 3M4 24l3-3m10-10 3-3"/>
-            <circle cx="104" cy="20" r="4"/><path d="M104 13v3m0 8v3m-7-7h3m8 0h3"/>
-          </g>
-        </pattern>
-      </defs>
-      <rect width="100%" height="32" fill="url(#cog-traces)"/>
-    </svg>
     <div class="masthead-row">
-      <h1>MARSI <span>// ARCHIVUM MARTIS</span></h1>
+      <div class="brand"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" class="emblem" aria-hidden="true"><polygon points="32.00,5.00 34.87,10.19 37.69,10.75 42.33,7.06 45.50,8.62 45.39,14.55 47.56,16.44 53.42,15.56 55.38,18.50 52.33,23.58 53.25,26.31 58.77,28.48 59.00,32.00 53.81,34.87 53.25,37.69 56.94,42.33 55.38,45.50 49.45,45.39 47.56,47.56 48.44,53.42 45.50,55.38 40.42,52.33 37.69,53.25 35.52,58.77 32.00,59.00 29.13,53.81 26.31,53.25 21.67,56.94 18.50,55.38 18.61,49.45 16.44,47.56 10.58,48.44 8.62,45.50 11.67,40.42 10.75,37.69 5.23,35.52 5.00,32.00 10.19,29.13 10.75,26.31 7.06,21.67 8.62,18.50 14.55,18.61 16.44,16.44 15.56,10.58 18.50,8.62 23.58,11.67 26.31,10.75 28.48,5.23" fill="none" stroke="currentColor" stroke-width="1.4" /><circle cx="32" cy="32" r="17" fill="none" stroke="currentColor" /><path d="M23 32 Q20 18 32 18 Q44 18 41 32 L38 35 L37 43 L27 43 L26 35 Z" fill="none" stroke="currentColor" stroke-width="1.4" /><rect x="25.0" y="27" width="5" height="5" fill="currentColor" /><rect x="34.0" y="27" width="5" height="5" fill="currentColor" /><path d="M32 33 L30 36 L34 36 Z M30 39 V43 M34 39 V43" fill="none" stroke="currentColor" /></svg><h1>MARSI <span>// COGITATOR DOMUS</span></h1></div>
       <p id="link" class="seal" role="status">[ ARCHIVE SEALED ]</p>
     </div>
+    <div class="machine-status"><span id="machine-services">MQTT UNKNOWN / ZIGBEE UNKNOWN</span><span id="imperial-date">LOCAL DATE PENDING</span></div>
     <nav id="navigation" class="controls" aria-label="Marsi views" hidden>
-      <button id="tab-chat" type="button" aria-pressed="true">[ CHAT ]</button>
-      <button id="tab-climate" type="button" aria-pressed="false">[ CLIMATE ]</button>
-      <button id="tab-admin" type="button" aria-pressed="false" hidden>[ ADMINISTRATION ]</button>
+      <button id="tab-chat" type="button" aria-pressed="true">VOX LOG</button>
+      <button id="tab-climate" type="button" aria-pressed="false">CLIMATE</button>
+      <button id="tab-admin" type="button" aria-pressed="false" hidden>SANCTUM</button>
+      <pre id="telemetry" class="telemetry">[ AWAITING MACHINE READINGS ]</pre>
       <button id="lock" type="button" class="end">LOCK</button>
     </nav>
   </header>
 
   <main>
+    <section id="interlude" class="panel interlude" aria-label="Local cogitator transmission" hidden><div id="interlude-stage"></div></section>
     <section id="gate" class="panel gate" aria-labelledby="gate-title">
       <p class="kicker">[ TERRA // LOCAL UPLINK ]</p>
       <h2 id="gate-title">Open the archive</h2>
@@ -68,39 +58,22 @@
         </form>
         <div class="controls chat-actions">
           <label><input id="voice" type="checkbox"> Voice</label>
-          <label><input id="idle" type="checkbox"> Idle rites</label>
-          <button type="button" data-command="art">ART</button>
+          <label><input id="idle" type="checkbox"> Idle screens</label>
+          <button type="button" data-command="sermon">SERMON</button>
+          <button type="button" data-command="auspex">AUSPEX</button>
           <button type="button" data-command="bless">BLESS</button>
           <button type="button" data-command="help">HELP</button>
         </div>
         <p id="vox-hint" class="message" hidden></p>
         <audio id="reply-audio" controls preload="none" aria-label="Marsi's voice" hidden></audio>
       </div>
-      <aside class="panel relic" aria-label="Marsi and machine readings">
-        <p class="kicker">[ MARSI / MARS RELIQUARY ]</p>
-        <pre class="portrait" aria-hidden="true">
-         .--.  .--.
-    _.-==|  |==|  |==-._
-  .'     .--------.     '.
- [::]---/ .------. \---[::]
-   ||  |  | o  o |  |  ||
-  &lt;==&gt; |  |  /\  |  | &lt;==&gt;
-   ||  |  \_||||_/  |  ||
- [::]---\   |__|   /---[::]
-  '._    '--------'    _.'
-     '-==|__|==|__|==-'
-          ||    ||
-       o==[]====[]==o</pre>
-        <p class="kicker">MARS // SEEK KNOWLEDGE</p>
-        <pre id="telemetry" class="telemetry">[ AWAITING MACHINE READINGS ]</pre>
-      </aside>
     </section>
 
     <section id="climate" class="panel sensorium" aria-labelledby="climate-title" hidden>
       <div class="sensorium-header">
         <div>
           <p class="kicker">[ SENSORIUM // CLIMATE ARCHIVE ]</p>
-          <h2 id="climate-title">Climate</h2>
+          <h2 id="climate-title">++ AUSPEX / CLIMATE ++</h2>
         </div>
         <p id="climate-link" class="seal" role="status">[ CONNECTING ]</p>
       </div>
@@ -119,7 +92,7 @@
         <div id="legend" class="controls legend" aria-label="Show or hide sensors"></div>
         <p id="inspect-help" class="message">Tap a chart or use the arrow keys to inspect a reading.</p>
         <section class="chart" aria-labelledby="temp-title">
-          <h3 id="temp-title">Temperature <span>°C</span></h3>
+          <h3 id="temp-title">Temperature <span>Â°C</span></h3>
           <canvas id="temperature-chart" tabindex="0" aria-label="Temperature history" aria-describedby="inspect-help"></canvas>
           <p id="temperature-readout" class="readout" aria-live="polite"></p>
         </section>
@@ -132,7 +105,7 @@
     </section>
     <section id="climate-admin" class="panel sensorium" aria-labelledby="admin-title" hidden>
       <div class="sensorium-header">
-        <div><p class="kicker">[ SENSORIUM // KEEPER ACCESS ]</p><h2 id="admin-title">Administration</h2></div>
+        <div><p class="kicker">[ SENSORIUM // KEEPER ACCESS ]</p><h2 id="admin-title">++ SANCTUM ++</h2></div>
         <button id="admin-lock" type="button" hidden>LOCK ADMIN</button>
       </div>
       <form id="admin-login" class="admin-block controls">
@@ -158,7 +131,7 @@
             <label>Name <input id="admin-name" required maxlength="80"></label>
             <label>Room <input id="admin-room" maxlength="80"></label>
             <label>Location <select id="admin-location"><option value="indoor">Indoor</option><option value="outdoor">Outdoor</option></select></label>
-            <label class="controls"><input id="admin-use-color" type="checkbox"> Chart colour <input id="admin-color" type="color" value="#9fbf97"></label>
+            <label class="controls"><input id="admin-use-color" type="checkbox"> Chart colour <input id="admin-color" type="color" value="#ffb000"></label>
             <div class="controls admin-actions">
               <button id="admin-save" type="submit">Save sensor</button>
               <button id="admin-show" type="button" hidden>Show sensor</button>

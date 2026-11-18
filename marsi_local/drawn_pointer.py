@@ -5,7 +5,7 @@ from ctypes import (CDLL, CFUNCTYPE, POINTER, Structure, byref, cast, c_char, c_
                     c_int, c_long, c_uint, c_ulong, c_ushort, c_void_p)
 import os
 
-from .electoo import GREEN, RED
+from .theme import GREEN, RED
 
 
 class XColor(Structure):

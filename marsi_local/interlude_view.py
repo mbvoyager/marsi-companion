@@ -11,6 +11,19 @@ TITLES = {"auspex": "AUSPEX DOMUS", "vox": "TRANSMISSIO VOX", "servitor": "RELAT
           "hololith": "HOLOLITH", "codex": "FRAGMENTUM CODEX", "noosphere": "NOOSPHERIC TRANSIT"}
 
 
+class SceneRandom:
+    """Portable decorative PRNG, identical to the browser's 32-bit sequence."""
+    def __init__(self, seed):
+        self.state = seed
+
+    def random(self):
+        self.state = (1664525*self.state+1013904223) & 0xffffffff
+        return self.state/4294967296
+
+    def randrange(self, stop):
+        return int(self.random()*stop)
+
+
 def wire_model(kind):
     points, edges = [], []
     if kind == "planet":
@@ -71,6 +84,7 @@ def machine_rows(data):
 
 class InterludeView:
     def __init__(self, canvas, mono, packet, started, reduced=False):
+        from tkinter import font
         if packet.get("version") != 1 or packet.get("type") not in TYPES:
             raise ValueError("Unsupported interlude packet")
         self.canvas, self.mono, self.packet = canvas, mono, packet
@@ -79,8 +93,10 @@ class InterludeView:
         self.dynamic = []
         self.sweep = self.vox_text = None
         self.last_frame = -1
+        self.character_width = max(1,font.Font(root=canvas, family=mono, size=-11).measure("M"))
 
     def text(self, x, y, value, color=BONE, size=11, **kwargs):
+        kwargs.setdefault("justify", "left")
         return self.canvas.create_text(x, y, text=value, fill=color, font=(self.mono, -size), anchor="nw", **kwargs)
 
     def build(self, w, h):
@@ -88,7 +104,7 @@ class InterludeView:
         c.delete("all")
         self.dynamic, self.sweep, self.vox_text = [], None, None
         self.w, self.h = w, h
-        self.rng = random.Random(self.packet["seed"])
+        self.rng = SceneRandom(self.packet["seed"])
         data, kind = self.packet["data"], self.packet["type"]
         self.background = c.create_polygon(9,1,w-9,1,w-1,9,w-1,h-9,w-9,h-1,9,h-1,1,h-9,1,9, outline=DIM, fill=BLACK)
         c.create_line(9, 27, w-9, 27, fill=DIM)
@@ -127,7 +143,7 @@ class InterludeView:
             if lost:
                 self.lost_items.append(c.create_oval(x-8,y-8,x+8,y+8,outline=FAULT))
             tx, ty = (18, cy+radius+14+i*34) if stacked else (cx+radius+17, top+i*max(24,(bottom-top-6)/max(1,len(sensors))))
-            available = max(10, int((w-tx-10)/6.6))
+            available = max(10, int((w-tx-22)/self.character_width))
             name = sensor["name"][:available]
             value = "NO SIGNAL" if sensor["temperature"] is None else f"{sensor['temperature']:.1f} °C"
             sensor_mark(c, tx+3, ty+6, sensor["style"], 3)
@@ -137,7 +153,7 @@ class InterludeView:
 
     def build_vox(self, data):
         lines = "\n".join(data["lines"]) + ("\n[DATA CORRUPTED]" if data["corrupted"] else "")
-        width = max(16, int((self.w-28)/6.7))
+        width = max(16, int((self.w-28)/self.character_width))
         header = f"{data['origin']} / {data['channel']}\n{data['imperial_date']}\n"
         body = "\n".join(textwrap.fill(line, width) for line in lines.splitlines())
         capacity = max(3,int((self.body_bottom-self.body_top)/14))
@@ -149,19 +165,22 @@ class InterludeView:
     def build_servitor(self, data):
         c = self.canvas
         columns = (self.w-30)/2
-        row_height = max(26, (self.body_bottom-self.body_top-39)/4)
+        row_height = max(24, (self.body_bottom-self.body_top-50)/4)
         for index, name in enumerate(("server", "pi")):
             x = 12+index*(columns+6)
             self.text(x,self.body_top,"COGITATOR" if name == "server" else "CORPUS / PI", BRASS)
             for row, (label, value, amount, maximum) in enumerate(machine_rows(data["machines"][name])):
                 y = self.body_top+18+row*row_height
-                self.text(x,y,label,BONE,10)
+                if self.w < 420:
+                    label = {"Warmth of the Spirit": "Spirit Warmth", "Load of the Litany": "Litany Load",
+                             "Days since Consecration": "Consecrated Days"}.get(label,label)
+                self.text(x,y,label,BONE,11)
                 self.text(x,y+11,value,AMBER if amount is not None else BRASS,11)
                 c.create_rectangle(x,y+row_height-4,x+columns-5,y+row_height-1,fill="#251e14",outline="")
                 if amount is not None:
                     fill = max(0,min(1,amount/maximum))*(columns-5)
                     c.create_rectangle(x,y+row_height-4,x+fill,y+row_height-1,fill=AMBER,outline="")
-        self.text(12,self.body_bottom-14,data["thought"],BRASS,10,width=self.w-24)
+        self.text(12,self.body_bottom-28,data["thought"],BRASS,10,width=self.w-24)
 
     def build_hololith(self, data):
         self.points, self.edges = wire_model(data["model"])
@@ -172,13 +191,14 @@ class InterludeView:
 
     def build_codex(self, data):
         record = data["codex"]
-        self.text(14,self.body_top,record["title"].upper(),AMBER,12,width=self.w-28)
-        width = max(20,int((self.w-30)/6.7))
+        title = self.text(14,self.body_top,record["title"].upper(),AMBER,12,width=self.w-28)
+        body_y = self.canvas.bbox(title)[3]+8
+        width = max(20,int((self.w-30)/self.character_width))
         lines = []
         for fact in record["facts"]:
             lines.extend(textwrap.wrap(fact,width)+[""])
-        capacity = max(1,int((self.body_bottom-self.body_top-35)/14))
-        self.text(14,self.body_top+25,"\n".join(lines[:capacity]),BONE,11)
+        capacity = max(1,int((self.body_bottom-body_y-15)/14))
+        self.text(14,body_y,"\n".join(lines[:capacity]),BONE,11)
         self.canvas.create_rectangle(self.w-68,self.body_bottom-14,self.w-14,self.body_bottom-4,fill=BRASS,outline="")
         self.text(self.w-65,self.body_bottom-14,"SEALED",BLACK,9)
 
