@@ -184,9 +184,19 @@ export class InterludeView {
       const lines = wrap(data.codex.title.toUpperCase()+"\n\n"+data.codex.facts.join("\n\n"),Math.floor((width-30)/7.3));
       lines.slice(0,Math.floor((this.bottom-this.top-20)/17)).forEach((line,i) => this.text(ctx,14,this.top+i*17,line,i === 0 ? c.amber : c.bone));
       this.text(ctx,width-75,this.bottom-12,"[SEALED]",c.brass,11);
+      ctx.fillStyle=c.dim; ctx.fillRect(14,this.bottom-14,80,12);
+      this.text(ctx,17,this.bottom-14,"REDACTED",c.bone,10);
     } else {
-      this.hex = [];
-      for (let x=12; x<width-48; x+=52) for (let y=this.top; y<this.bottom-28; y+=18) this.hex.push([x,y]);
+      this.hex = []; this.realCells=[];
+      const xs=[],ys=[];
+      for (let x=12; x<width-48; x+=52) xs.push(x);
+      for (let y=this.top; y<this.bottom-28; y+=18) ys.push(y);
+      for (const [i,x] of xs.entries()) for (const [j,y] of ys.entries()) {
+        const name = i===0 && j===0 ? "server" : i===xs.length-1 && j===ys.length-1 ? "pi" : null;
+        const value = name ? data.machines[name]?.temperature_c : null;
+        if (value != null) this.realCells.push([x,y,`${value}C`]);
+        else this.hex.push([x,y]);
+      }
       this.text(ctx,12,this.bottom-14,this.readingLine(),c.amber,11);
     }
   }
@@ -229,12 +239,14 @@ export class InterludeView {
         const yr = y*.94-zr0*.34, zr = y*.34+zr0*.94, scale = 3/(3+zr);
         return [width/2+xr*radius*scale,(this.top+this.bottom)/2-8+yr*radius*scale];
       });
+      for (const [a,b] of this.model.edges) this.line(ctx,...points[a],...points[b],"#3f2b0e",3);
       for (const [a,b] of this.model.edges) this.line(ctx,...points[a],...points[b],c.amber);
     } else if (this.hex) {
       if (!this.hexValues || !this.reduced && Math.floor(elapsed*5) !== this.hexAt) {
         this.hexAt = Math.floor(elapsed*5); this.hexValues = this.hex.map(() => Math.floor(this.rng()*65536).toString(16).toUpperCase().padStart(4,"0"));
       }
       this.hex.forEach(([x,y],i) => this.text(ctx,x,y,this.hexValues[i],c.dim,12));
+      this.realCells.forEach(([x,y,value]) => this.text(ctx,x,y,value,this.reduced || Math.floor(elapsed)%4<2 ? c.amber : c.bone,12));
     }
     const remaining = this.packet.duration-(now-this.started)/1000;
     if (this.canvas.style) this.canvas.style.opacity = this.reduced || remaining > 1.5 ? "1" : remaining > .6 ? ".7" : ".3";

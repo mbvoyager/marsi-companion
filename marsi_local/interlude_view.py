@@ -186,6 +186,7 @@ class InterludeView:
         self.points, self.edges = wire_model(data["model"])
         self.radius = min(self.w*.24,(self.body_bottom-self.body_top)*.39)
         self.center = self.w/2, (self.body_top+self.body_bottom)/2-6
+        self.wire_glows = [self.canvas.create_line(0,0,1,1,fill="#3f2b0e",width=3) for _ in self.edges]
         self.wires = [self.canvas.create_line(0,0,1,1,fill=AMBER) for _ in self.edges]
         self.text(12,self.body_bottom-13,self.reading_line(data),BRASS,10)
 
@@ -201,12 +202,20 @@ class InterludeView:
         self.text(14,body_y,"\n".join(lines[:capacity]),BONE,11)
         self.canvas.create_rectangle(self.w-68,self.body_bottom-14,self.w-14,self.body_bottom-4,fill=BRASS,outline="")
         self.text(self.w-65,self.body_bottom-14,"SEALED",BLACK,9)
+        self.canvas.create_rectangle(14,self.body_bottom-14,91,self.body_bottom-4,fill=DIM,outline="")
+        self.text(17,self.body_bottom-14,"REDACTED",BONE,9)
 
     def build_noosphere(self, data):
         columns = max(2,min(10,int((self.w-24)/49)))
         rows = max(2,min(12,int((self.body_bottom-self.body_top-26)/16)))
+        self.real_cells = []
         for col in range(columns):
             for row in range(rows):
+                name = "server" if (col,row) == (0,0) else "pi" if (col,row) == (columns-1,rows-1) else None
+                value = (data["machines"].get(name) or {}).get("temperature_c") if name else None
+                if value is not None:
+                    self.real_cells.append(self.text(12+col*49,self.body_top+row*16,f"{value:g}C",AMBER,11))
+                    continue
                 item = self.text(12+col*49,self.body_top+row*16,"0000",DIM,11)
                 self.dynamic.append(item)
         # Real measurements occupy a separate, steady line. Glitches never
@@ -248,11 +257,15 @@ class InterludeView:
             c.itemconfigure(self.vox_text,text=self.vox_full[:count]+("" if count == len(self.vox_full) else " ▌"))
         if self.packet["type"] == "hololith":
             projected = project(self.points,0 if self.reduced else elapsed*.35,*self.center,self.radius)
-            for item,(a,b) in zip(self.wires,self.edges):
-                c.coords(item,*projected[a],*projected[b])
+            for items in (self.wire_glows,self.wires):
+                for item,(a,b) in zip(items,self.edges):
+                    c.coords(item,*projected[a],*projected[b])
         if self.packet["type"] == "noosphere" and (self.reduced and frame == 0 or not self.reduced and frame%3 == 0):
             for item in self.dynamic:
                 c.itemconfigure(item,text=f"{self.rng.randrange(65536):04X}")
+        if self.packet["type"] == "noosphere":
+            for item in self.real_cells:
+                c.itemconfigure(item,fill=AMBER if self.reduced or int(elapsed)%4 < 2 else BONE)
         remaining = self.packet["duration"]-elapsed
         color = AMBER if self.reduced or remaining > 1.5 else BRASS if remaining > .6 else DIM
         c.itemconfigure(self.title,fill=color)
