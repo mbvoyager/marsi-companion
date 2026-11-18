@@ -287,8 +287,8 @@ systemctl --user stop marsi-server
 
 Ollama also needs its own service running. Inspect it with `systemctl status ollama`.
 
-The running Marsi service also creates daily ASCII art, sermons every 2–3 days
-and a morning entry at 07:00. Schedules and the conversation journal stay in the
+The running Marsi service creates one authored sermon per waking day
+and a morning entry at 07:00. Local-data interludes are requested by the clients. Schedules and the conversation journal stay in the
 private SQLite database across restarts. Set Ubuntu's timezone correctly with
 `timedatectl`; the morning uses this clock. The scheduled session defaults to
 `pi`, matching the Pi settings. See [behaviour and memory](behaviour.md) for

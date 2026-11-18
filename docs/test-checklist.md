@@ -144,7 +144,7 @@ Forget does not erase external backups or reset the local ritual timer.
 ## 5. Small rituals
 
 - [ ] With Voice off, press **BLESS** several times, waiting for each result.
-      Look for a blessing, salute, inspection or doodle. Selection is random;
+      Look for a blessing, salute or inspection. Selection is random;
       four clicks do not guarantee all four animations.
 - [ ] Leave Idle rites on and the display idle during the daytime. An automatic
       ritual should appear after the configured 10–20 minute interval.
@@ -194,21 +194,24 @@ normal timer, quiet-hour and speech settings when finished.
       Bluetooth, also verify receiver reconnection, output selection and playback.
       If audio fails, close Marsi and repeat the local audio check first.
 
-## 7. Art, sermons and morning speech
+## 7. Interludes, daily sermons and morning speech
 
-- [ ] Type `art` twice. See original ASCII machine diagrams with real available
-      numeric readings; unavailable Pi data is labelled as such. With Voice on,
-      Marsi speaks a description rather than reading punctuation.
-- [ ] Type `sermon`. See a short kind sermon framed by art; with Voice on, hear
-      the corresponding words. Reopen Marsi and find both inscriptions again.
-- [ ] Leave Ubuntu running over a day and check for one scheduled artwork.
-      Schedules are preserved if the server restarts.
-- [ ] Leave Ubuntu running for 2–3 days and find a scheduled tiny sermon.
-- [ ] With Voice and Idle rites on, leave both machines and the audio receiver
-      running before 07:00. Hear the morning greeting around 07:00, including
-      during default quiet hours. It includes date and available machine data.
+- [ ] Try all six scene commands on Pi and web: `/auspex`, `/vox`, `/servitor`,
+      `/hololith`, `/codex`, `/noosphere`. Close each by touch or key.
+- [ ] Check real sensor names, honest `NO SIGNAL`, and schematic radar labelling.
+- [ ] Verify that an interlude adds no journal entry and works without Internet.
+- [ ] Check matching sensor colours, symbols and curve patterns on both clients.
+- [ ] Send text and F8 messages; observe the moving block cursor without audio gaps.
+- [ ] Enable reduced motion and verify immediate text and stationary scenes.
+- [ ] Type `sermon` with Voice on, then repeat it. The same daily entry is replayed.
+- [ ] Leave Ubuntu running across a waking day and find one scheduled sermon.
+      A restart must preserve its daily limit and non-repeating pool.
+- [ ] With Voice and Idle on, leave both machines and audio powered before 07:00.
+      Hear the morning greeting, including during default quiet hours.
 - [ ] Restart the display after an observance finishes speaking. Its local
-      delivery marker should prevent the same greeting being spoken again.
+      delivery marker should prevent automatic repetition.
+- [ ] Reboot both machines and verify the reticle, persistent climate curves,
+      HTTPS login and existing autostart. See [the update steps](cogitator.md).
 
 Do not change the operating-system clock just to speed up these tests. Calendar
 and restart logic has automated tests; long-running checks verify the actual

@@ -4,6 +4,8 @@ Use this page if Ubuntu, Ollama, speech and the Pi are already installed. For a
 fresh installation, follow [start here](start-here.md), then the
 [Ubuntu guide](ubuntu-server.md) and [Pi guide](raspberry-pi.md).
 Commands below assume both checkouts are `~/marsi-companion`.
+For the cogitator redesign, use the [release update guide](cogitator.md) first;
+it includes the release branch switch, backup and new feature checks.
 
 ## 1. Update Ubuntu first
 

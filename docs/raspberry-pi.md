@@ -210,11 +210,12 @@ monitor's own sleep/eco timer or any separately installed screen-locking utility
 
 ## 4. Routines and automatic startup
 
-The Idle rites switch controls spontaneous small rituals and scheduled speech.
-**BLESS** requests an immediate ritual; **ART** makes a hardware-shaped ASCII
-inscription. Typed `sermon` gives a tiny sermon. Manual requests use Voice.
+The Idle switch controls spontaneous rituals, local-data interludes and scheduled speech.
+**BLESS** requests an immediate ritual; **AUSPEX** opens a temporary sensor scene.
+**SERMON** retrieves today's single authored sermon. Manual spoken requests use Voice.
 Small automatic rituals are silent unless `MARSI_RITUAL_SPEECH=true`.
-Ubuntu also schedules daily art, a sermon every 2–3 days and a 07:00 greeting.
+Ubuntu schedules one daily sermon and a 07:00 greeting. See the
+[cogitator guide](cogitator.md) for the new appearance, interludes and sensor symbols.
 The greeting speaks during quiet hours by default; other automatic speech does
 not. See [behaviour and memory](behaviour.md) for every setting and timing rule.
 Set both machines' timezone correctly; `timedatectl` shows the current setting.

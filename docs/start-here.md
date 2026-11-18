@@ -65,24 +65,23 @@ silent by default, skip 22:00–08:00 in the Pi's local time, and defer while yo
 are interacting. They use short authored lines and do not wake Qwen. They are
 archived through the server, so the server connection is needed. Restarting the
 Pi starts a fresh small-ritual countdown. Ubuntu separately maintains persistent
-daily artwork, sermons every 2–3 days and a 07:00 greeting using local date and
-machine readings. [Behaviour and memory](behaviour.md) explains all schedules.
+one daily authored sermon and a 07:00 greeting using local date and
+machine readings. Silent local-data interludes appear every 30–90 idle minutes. [Behaviour and memory](behaviour.md) explains all schedules.
 
 ## What this prototype includes
 
 - Qwen conversation through Ollama with short responses and thinking disabled.
 - Optional CPU-only Whisper and Piper, loaded on first use and reused.
 - A lasting conversation journal, explicit notes and retrieval of older context.
-- A black/red/green terminal archive, corner ASCII figure, typing and F8 push-to-talk.
-- Numeric Pi/server hardware readings, machine-shaped ASCII artwork and scheduled observances.
-- Local `art`, `sermon`, `exit` and memory commands, with a Forget operation.
+- A black/oxide/brass/amber cogitator, original Pi figure, typing and F8 push-to-talk.
+- Numeric Pi/server and climate readings, six ephemeral scenes and daily observances.
+- Local `/auspex`, `sermon`, `exit` and memory commands, with a Forget operation.
 - A shared token for LAN access; one inference/speech task at a time.
 - Setup scripts, a server startup service, and automated regression tests.
 
 The starter does not yet include a wake word, continuous listening, self-editing
-code, device control, raster image generation, weather or news feeds. Current art
-is procedural ASCII and runs on this hardware. Qwen can also help describe chibi
-scenes and write image prompts. A raster image pipeline would be a separate later
+code, device control or raster image generation. Qwen can help describe chibi
+scenes and write image prompts. Explicit Internet research is a separate opt-in feature. A raster image pipeline would be a separate later
 component, likely on better hardware or an explicitly chosen service.
 
 ## Develop from either machine

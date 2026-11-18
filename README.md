@@ -24,8 +24,8 @@
 ```
 
 **A local AI companion in an oversized red hood.** Qwen runs on an Ubuntu
-cogitator; a Raspberry Pi bears his ASCII effigy, microphone and voice.
-Blackened iron. Oxide red. Ivory electoos and muted green signals. Conversation, a lasting
+cogitator; a Raspberry Pi bears his original effigy, microphone and voice.
+Blackened iron. Oxide red. Bone-white inscriptions, brass and amber hololiths. Conversation, a lasting
 private journal and little acts of kindness within the solemn machine archive.
 
 > **ARCHIVE DECREE // READ BEFORE IGNITION**
@@ -43,8 +43,8 @@ to him. His world is grim; his welcome remains kind.
 
 The [persona and art direction](docs/persona-art-direction.md) records the premise
 and the owner's references. A local library supplies over 100 short 40K reference
-entries by topic. The terminal has dense electoo borders, a larger machine
-effigy and animated signal paths.
+entries by topic. Pi and web wear original cogitator frames, rivets and double rules.
+The Pi keeps its red-hooded effigy; the web bears a small cog-and-skull seal.
 
 He is a **companion**: someone to talk with, learn alongside, and share a small
 moment of delight with. His fictional character lives in
@@ -70,7 +70,7 @@ marks the keeper's hand upon the terminal.
  [ PI: FACE + SPEAKER ] <-- [ PIPER: TEXT TO SPEECH ]
          ^
          |
- [ TINY RITUAL TIMER: BLESS / WAVE / INSPECT / DOODLE ]
+ [ TINY RITUAL TIMER: BLESS / WAVE / INSPECT ]
 ```
 
 | Sacred designation | Practical meaning | Where it lives |
@@ -79,8 +79,9 @@ marks the keeper's hand upon the terminal.
 | The Listening Choir | Whisper tiny turns recordings into text | Ubuntu server |
 | The Vox Reliquary | Piper gives replies a spoken voice | Ubuntu server |
 | The Memory Dataslate | SQLite preserves the journal, notes and routine calendar | Ubuntu server |
-| The Little Body | Corner ASCII effigy, terminal journal, F8 vox, machine readings | Raspberry Pi |
-| The Electoo Loom | Original hardware-shaped ASCII art, sermons and first-light greeting | Ubuntu server |
+| The Little Body | Original effigy, cogitator journal, F8 vox, machine readings | Raspberry Pi |
+| The Local Auspex | Six ephemeral scenes from real climate and machine readings | Server + clients |
+| The Daily Litany | 42 authored sermons, one per day, plus the first-light greeting | Ubuntu server |
 
 The first forge is an **i5-4460 with 8 GB RAM** and a **Pi 3 B+ with 1 GB RAM**.
 The Pi carries no neural models. Downloads are needed during installation;
@@ -90,6 +91,8 @@ conversation and speech run locally once their models are available.
 
 Open these records in order. Keep the first trial small: one successful text
 conversation, then speech, then the little body.
+
+**Cogitator release: [step-by-step update and checks](docs/cogitator.md).**
 
 **Already awakened? [Quickstart: updates, opening the display and automatic boot](docs/quickstart.md).**
 
@@ -132,8 +135,11 @@ the conversation engine when you follow the Ubuntu guide and run without `--demo
   records only during that short interaction.
 - **Keep the archive.** Conversations return when the display reopens. Older
   transmissions wait behind the scroll seal. `/remember TEXT` tends explicit notes.
-- **Inscribe the machine.** `art` weaves an ASCII electoo from real readings.
-  One new inscription is offered each day; a tiny sermon follows every 2–3 days.
+- **Attend the local auspex.** `/auspex`, `/vox`, `/servitor`, `/hololith`,
+  `/codex` and `/noosphere` open temporary scenes without waking Qwen.
+  Silent interludes also appear every 30–90 minutes after two idle minutes.
+- **Hear the daily litany.** One short, playful sermon each waking day, drawn
+  without repetition from the eligible authored pool. `sermon` retrieves today's entry.
 - **Greet first light.** Around 07:00 the little priest offers a spoken kindness,
   the date and machine readings. The vox may sound even during quiet hours.
 - **Bless the idle moment.** Silent rituals appear every 10–20 minutes when idle,
@@ -144,9 +150,10 @@ the conversation engine when you follow the Ubuntu guide and run without `--demo
 ## Seal V · The Unfinished Relics
 
 This is a prototype. Measure speed and verify audio on the actual machines.
-The display, archive, schedule and local API have automated checks. Wake words,
-device control, raster chibi artwork, weather and news remain unfinished relics.
-The current loom makes ASCII inscriptions without an image model or external feed.
+The display, archive, calendar, interludes and local API have automated checks.
+Measure smoothness and voice on the physical Pi. Wake words and device control
+remain future relics. Explicit `/research` uses separately enabled Internet access;
+the local interludes do not.
 
 The script-based Marsi lives in
 [his original repository](https://github.com/mbvoyager/tiny-tech-priest-marsi).

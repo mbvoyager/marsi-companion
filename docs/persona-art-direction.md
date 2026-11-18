@@ -13,31 +13,27 @@ to the little priest; the surrounding world supplies the grimness.
 
 ## Visual grammar
 
-The owner's screenshots supply the art direction: worn ivory circuitry on
-oxide-red and near-black surfaces, long parallel paths, right-angle elbows,
-toothed manuscript borders, concentric cogs, cryptic inscriptions, and
-machine reliquaries. The later character reference adds a very different
-silhouette for MARSI himself: an oversized, softly folded red hood, huge glossy
-cyan lenses, a small respirator, short robes and little hands holding a relic.
+The approved cogitator reference supplies black iron, oxide red, bone, brass
+and one amber hololith accent. Chamfered frames, small rivets, double rules and
+`++ TITLE ++` inscriptions replace the old ornamental bands. Green means a
+healthy signal; red marks a fault. Sensor colours are category identities,
+paired with a geometric symbol and a distinct line pattern, never status alone.
+The shared definition is `marsi_local/web/cogitator.json`.
 
-Use dense, purposeful geometry for the terminal ornaments. MARSI himself is a
-round, gentle chibi adept with bright optics and a little dataslate hugged close.
-Gold cog trim, breathing tubes and a collar seal preserve his Mechanicus identity.
-Muted green identifies living signal and telemetry. Ivory keeps conversation
-readable. Red belongs to the forge, its bands and its controls.
+The Pi portrait keeps its original oversized red hood, cyan optics, respirator,
+robes, dataslate, shapes and proportions. Its drawing now lives in `effigy.py`.
+It looks toward interludes, flashes its main lenses amber briefly for Vox, then
+returns to cyan. A newly lost sensor causes a short concerned look. The website
+has no portrait; its small cog-and-skull seal is an original emblem.
 
-The mouse pointer is an original mechanical reticle: a green central aiming
-point and cardinal marks, oxide-red brackets, and transparent gaps. Its hotspot
-is the centre. On X11, a small shaped window draws it over the archive, input
-and buttons. X11 delivers mouse events to the widgets below the reticle.
+The green/red reticle and its centred hotspot remain in use. On X11 a shaped
+window draws the pointer without consuming clicks meant for underlying widgets.
 
-Ornament occupies the upper and lower friezes, the archive's edge and a substantial
-side effigy. The character breathes, blinks, shifts his gaze, leans towards the
-human's journal when listening and gently nods during speech. Shapes are cached
-and moved in place so the Pi does not recreate the portrait every frame.
-Animation travels along existing circuit paths: slow while idle,
-faster while listening or correlating, and rhythmic during transmission.
-The movement is symbolic, not a measurement of a literal interdimensional signal.
+Scenes use local snapshots. Radar positions are schematic; fake hex, seals and
+header glitches are decoration. Values stay accurate and missing data says
+`NO SIGNAL`. Reuse Tk items and cap motion at 15 fps. New Marsi text is revealed
+with a moving block cursor; archive history opens immediately. Reduced motion
+disables the reveal, sweep, scan bar and glitches. See [the release guide](cogitator.md).
 
 ## Lore provenance
 

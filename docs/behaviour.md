@@ -1,14 +1,14 @@
 # Marsi's appearance, routines and memory
 
-The terminal archive wears blackened iron, oxide red, worn ivory and muted green.
-Parallel circuit traces, cog teeth and mechanical inscriptions span its upper
-and lower borders and archive rail. A cute, red-hooded Tech-Priest with oversized
-cyan optics and a little dataslate stands beside the journal. He breathes,
-blinks, looks around, leans in to listen and nods during speech.
-Travelling signals and optical lenses respond to idle, listening,
-thinking and speaking states. Static drawings are cached; the five-frame-per-second
-animation moves existing items. Typing, voice and history remain available at
-800x480 and 480x320. This uses ordinary Tk widgets, not a terminal emulator.
+The cogitator uses black iron, oxide red, bone, brass and amber. Original
+chamfered frames, rivets and double rules surround the journal and Climate tab.
+The Pi keeps its original red-hooded portrait and cyan optics; the web uses a
+small original cog-and-skull seal. Colours, typography and layout tokens share
+one definition. Sensor identity uses colour, shape and line pattern together.
+New Marsi replies reveal themselves behind a moving block cursor; loaded history
+appears immediately. Reduced motion disables this effect and scene motion.
+The Pi supports 800x480 and 480x320, caching its drawings and limiting motion to
+15 fps. Verify smoothness and audio on the physical Pi after updating.
 
 MARSI speaks as a small, warm Tech-Priest physically beneath a forge cathedral
 on Mars in the Warhammer 40,000 universe. The terminal is an aperture through
@@ -24,11 +24,10 @@ are grim; the little priest's appearance and manner are gentle. An explicit
 question about the actual software receives an honest answer; ordinary
 conversation stays in character.
 
-The artworks are original procedural ASCII compositions inspired by sacred
-machine diagrams, guided by the owner's four electoo and reliquary references.
-They do not reproduce rulebook illustrations or require an
-image-generation model. Hardware readings influence the random composition,
-and the caption names the readings used. `art` makes another composition now.
+Six ephemeral scenes present local data: Auspex, Vox, Servitor, Hololith,
+Codex and Noosphere. They use no LLM or Internet and create no journal entries.
+Old diagram entries remain readable. Missing or stale values are never invented.
+See [the cogitator guide](cogitator.md) for the scenes, settings and update steps.
 
 The local [lore library](../marsi_local/lore.json) contains over 100 short
 reference entries across Mechanicus, Imperial, Chaos and alien subjects, with
@@ -85,7 +84,7 @@ repetition; high penalties can also degrade language quality. Test the actual
 model with [the Ubuntu conversation check](ubuntu-server.md#repeated-or-irrelevant-replies).
 
 Restart the server after changing persona or lore. Restart the Pi display for
-artwork changes. All machine readings are actual supplied numbers or unknown;
+display changes. All machine readings are actual supplied numbers or unknown;
 travelling decorative lights do not measure a literal interdimensional signal.
 
 ## Routine schedule
@@ -96,19 +95,21 @@ is running. The Pi retrieves them when connected.
 
 | Routine | Timing | Default sound |
 | --- | --- | --- |
-| Machine artwork | Once each day, at a randomly chosen time from 09:00 to before 21:00 | Silent |
-| Tiny sermon with art | Every 2 or 3 days; the next interval is chosen after each sermon | Spoken when the Pi is idle and outside quiet hours |
-| Morning greeting | Around 07:00, using the date and actual available machine readings | Spoken, including during quiet hours |
+| Daily sermon | One random time in the waking interval after the morning hour | Spoken when the Pi is idle |
+| Morning greeting | Around 07:00, using date and available machine readings | Spoken, including during quiet hours |
 | Small blessing or inspection | Every 10–20 minutes, after two idle minutes | Silent |
+| Local-data interlude | Every 30–90 minutes, after two idle minutes, outside quiet hours | Silent |
 
-The first sermon is scheduled 2–3 days after the scheduler first runs. Manual
-`sermon` and `art` do not consume or postpone the scheduled ones. A late server
-start catches up at most one artwork and one sermon, without a backlog. A missed
-morning may appear during the three-hour window from 07:00 to before 10:00;
-after that it is skipped. Dates and routine targets use Ubuntu's local clock.
-Set both machines to the intended timezone, and keep their clocks synchronized.
+The default sermon window is 08:00–22:00. Manual `sermon` retrieves the same
+entry for the current day; it consumes that day's selection if called first.
+The 42 authored texts form a persistent shuffle bag. Templates needing an indoor,
+outdoor or server temperature are eligible only with the required current data.
+A late start catches up at most the current waking day's sermon, never missed
+days. A missed morning may appear from 07:00 to before 10:00, then is skipped.
+Dates and routine targets use Ubuntu's local clock, including DST wall time.
+Keep both machines in the intended timezone with synchronized clocks.
 
-Spoken observances require the Pi display, Voice, Idle rites and
+Spoken observances require the Pi display, Voice, Idle and
 `MARSI_OBSERVANCE_SPEECH=true`. The display waits for an idle moment, keeps the
 latest pending spoken observance, and skips speech older than ten minutes.
 It records the last successfully played observance ID locally under `data/`
@@ -139,7 +140,7 @@ MARSI_QUIET_END=8
 ```
 
 Set the morning override to `false` if you later prefer silence at 07:00.
-The Idle rites switch stops the Pi's spontaneous small rituals and scheduled
+The Idle switch stops the Pi's spontaneous small rituals and scheduled
 speech. It does not delete or disable the server's daily archive entries.
 Voice off always prevents playback. Manual ART, BLESS and `sermon` follow Voice;
 their spoken versions read a sentence, rather than pronouncing ASCII diagrams.
@@ -181,7 +182,7 @@ directory cleaned after playback. Only an explicitly requested file diagnostic,
 such as `speech --synthesize PATH`, saves a WAV for later inspection. Models
 remain installed separately. See [audio diagnostics](audio-check.md).
 
-Successful conversations, recognized human speech, artworks, sermons and rituals
+Successful conversations, recognized human speech, sermons, rituals and legacy inscriptions
 are saved in `data/companion.sqlite3` on Ubuntu. The display reopens the latest
 80 entries and loads older pages on request. It keeps at most 600 loaded entries
 to protect Pi memory; the full journal remains on the server until you delete it.
@@ -224,8 +225,9 @@ SQLite deletion is logical deletion, not secure erasure of storage media.
 
 | Input | Action |
 | --- | --- |
-| `art` or `/art` | Generate and archive a machine-shaped ASCII artwork |
-| `sermon` or `/sermon` | Give and archive a tiny sermon now |
+| `/auspex`, `/vox`, `/servitor`, `/hololith`, `/codex`, `/noosphere` | Open the named temporary scene |
+| `/interlude` | Open a random temporary scene |
+| `sermon` or `/sermon` | Retrieve today's single authored sermon |
 | `bless` or `/ritual` | Perform and archive a short ritual |
 | `history` or `/history` | Display: load an older page; terminal: print the latest page |
 | `/remember TEXT` | Save an explicit note, up to 200 characters |
@@ -236,4 +238,4 @@ SQLite deletion is logical deletion, not secure erasure of storage media.
 
 These commands are typed. Spoken utterances remain conversation, so Whisper
 misrecognizing an exit or forget command cannot close the display or erase memory.
-Exact command words are reserved; `Tell me about art` is ordinary conversation.
+Exact command words are reserved; `Tell me about machines` is ordinary conversation.

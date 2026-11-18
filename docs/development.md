@@ -19,7 +19,11 @@ built, understood and repaired.
 | `marsi_local/personality.txt` | Marsi's conversational character |
 | `marsi_local/language.py` | Offline English/German reply gate and context filtering |
 | `marsi_local/lore.py`, `lore.json` | Local canon reference and topic selection |
-| `marsi_local/electoo.py` | Cached circuitry, skull effigy and moving signals |
+| `marsi_local/theme.py`, `web/cogitator.json`, `chrome.py` | Shared palette, typography, spacing, sensor identities and cached cogitator frames |
+| `marsi_local/effigy.py` | Original Pi portrait, with interlude and concerned animation modes |
+| `marsi_local/interludes.py`, `interlude_view.py`, `web/interludes.mjs` | Local-data payloads, idle gates and cached scene renderers |
+| `marsi_local/typewriter.py`, `web/typing.mjs` | Bounded moving-block reply reveal and reduced motion |
+| `marsi_local/sermons.py`, `sermons.json`, `observances.py` | Daily calendar and persistent non-repeating authored sermon pool |
 | `marsi_local/pointer.py`, `drawn_pointer.py`, `assets/` | Drawn X11 reticle, native fallback and shared bitmaps |
 | `marsi_local/core.py` | Ollama, durable journal, working context, notes and recall |
 | `marsi_local/reading_tools.py`, `model_tools.py` | Climate question router, archive excerpts and Ollama argument validation |
@@ -27,10 +31,10 @@ built, understood and repaired.
 | `marsi_local/speech.py` | Optional Whisper/Piper loading and WAV validation |
 | `marsi_local/server.py` | Authenticated HTTP endpoints |
 | `marsi_local/client.py` | Shared terminal/Pi API client |
-| `marsi_local/pi.py`, `display.py`, `ambient.py` | Audio, ASCII terminal display and idle rites |
+| `marsi_local/pi.py`, `display.py`, `ambient.py` | Audio, cogitator display and idle rites |
 | `marsi_local/transmission.py` | In-memory response timings and explicitly estimated progress |
 | `marsi_local/screen.py` | Temporary X11 screen-saver/DPMS inhibition and restoration |
-| `marsi_local/telemetry.py`, `liturgy.py` | Numeric readings, original ASCII art and persistent calendar |
+| `marsi_local/telemetry.py`, `liturgy.py` | Numeric readings, English morning greetings and calendar facade |
 | `config/` | Shareable setting examples, without credentials |
 | `deploy/`, `scripts/` | Installation and startup templates |
 
@@ -89,14 +93,16 @@ use `Content-Type: application/json`. The browser page, its static assets and
 | `POST /v1/chat` | `text`, `session_id`, optional boolean `want_audio` | Reply text, animation, source, optional WAV as `audio_base64`. An explicit research reply includes `sources` |
 | `POST /v1/voice` | `audio/wav` bytes; `X-Marsi-Session` header | Transcript, reply, optional audio; `?want_audio=false` skips synthesis |
 | `POST /v1/ritual` | `session_id`, optional `want_audio` | Authored ritual, independent of private memory |
-| `POST /v1/art`, `POST /v1/sermon` | `session_id`, optional `want_audio` | Authored/procedural inscription, archived; speech excludes diagrams |
+| `POST /v1/sermon` | `session_id`, optional `want_audio` | Today's authored sermon and journal entry; repeated requests reuse the same daily entry |
+| `GET /v1/interlude` | Optional `type=auspex`, `vox`, `servitor`, `hololith`, `codex`, `noosphere`; optional integer `duration=15..30` | Version 1 JSON: `type`, `seed`, `duration`, `data`. Fresh local snapshot, no journal, model or Internet |
+| `GET /v1/status` | None | Decorative Imperial date and MQTT/Zigbee2MQTT status; authenticated, no inference |
 | `GET /v1/journal` | `session_id`, optional `before` or `after`, `limit` 1–100 | Chronological journal page and `has_more` |
-| `GET /v1/telemetry` | None | Numeric server readings and fresh Pi readings |
+| `GET /v1/telemetry` | None | Numeric server and fresh Pi readings, service states and decorative Imperial date |
 | `POST /v1/telemetry` | `readings` object | Accept validated numeric Pi readings; return both machines |
 | `GET /v1/climate/now` | None | Latest values, report and measurement timestamps, sensor connection, battery warning and MQTT/Zigbee2MQTT states |
 | `GET /v1/climate/history` | `range=3h`, `24h` or `7d` | UTC window bounds and per-sensor temperature and humidity series. Longer windows return bucket means |
 | `GET /v1/climate/events` | `Accept: text/event-stream` | Initial snapshot and live `climate` events after readings, freshness or service states change |
-| `POST /v1/speak` | `session_id`, `entry_id`, `want_audio=true` | Read a persisted art/sermon/morning entry's spoken version |
+| `POST /v1/speak` | `session_id`, `entry_id`, `want_audio=true` | Read a persisted observance's spoken version, including legacy entries |
 | `POST /v1/voice-check` | `session_id`, `want_audio=true`, optional `text` up to 300 characters | Piper diagnostic only; no Whisper, Qwen or journal writes |
 | `GET /v1/memory?session_id=pi` | Session in query | Explicit notes |
 | `POST /v1/memory` | `session_id`, `text` | Add explicit note |
@@ -157,7 +163,7 @@ python3 -m venv .venv-tests
 .venv-tests/bin/python -m unittest discover -s tests -v
 .venv-tests/bin/python -m compileall -q marsi_local
 for script in scripts/*.sh deploy/marsi-xsession.sh; do bash -n "$script"; done
-node --test tests/web_climate_history.mjs
+node --test tests/web_climate_history.mjs tests/web_cogitator.mjs
 ```
 
 Tests exercise real local HTTP requests and a temporary SQLite database, with
@@ -238,7 +244,7 @@ X11 libraries are unavailable. The test needs `libxtst6` for event generation.
 3. Add streaming speech for shorter perceived delays and, if useful, a wake word
    with an obvious microphone indicator and physical mute option.
 4. Improve archive retrieval and add a reviewable memory editor. Raster chibi art
-   remains a separate optional image pipeline; current ASCII art needs no model.
+   would be a separate optional image pipeline. Current local-data scenes need no model.
 
 ## Prompt for continuing on Ubuntu
 
@@ -257,3 +263,36 @@ Copy this into your next development chat, opened in the repository:
 > Mechanicus archive style of the README. Frame Marsi as a companion. Keep credentials,
 > models and conversations out of Git. Explain each meaningful change simply and
 > run appropriate tests. Do not claim consciousness or hardware results not measured.
+
+## Cogitator protocol and calendar
+
+`GET /v1/interlude` is an authenticated read that remains available during
+inference. Its version-1 envelope is `{version, type, seed, duration, data}`.
+The data contains a UTC snapshot timestamp, decorative Imperial date, visible
+sensors (name/location/signal/fresh values/shared style), numeric server/Pi
+readings, service states and a thought. Vox adds authored lines, Codex selects
+local lore, and Hololith selects an original wire model. The schema is bounded
+to 32 sensor records; a radar scene explicitly labels its displayed subset.
+No LLM, outbound HTTP, MQTT command or journal insertion occurs on this path.
+
+Both renderers consume `tests/fixtures/interludes.json`. Tk smoke tests cover
+all six scenes at both sizes, stable item IDs, dismissal, lens restoration and
+text reveal. Node tests render those same packets and exercise reduced motion.
+CI runs the real Tk suite under xvfb. Physical Pi timing and sound remain a
+hardware acceptance check; a Windows rendering pass does not prove Pi speed.
+
+The shared theme is `web/cogitator.json`; Python derives the browser CSS rather
+than maintaining a second palette. The public climate representation adds a
+`style` object with `color`, `shape` and `dash`. It uses registry insertion order,
+so hiding or renaming a sensor retains its style, and explicit colours remain
+in effect. Default category colours are distinct from signal status colours.
+
+`sermon_days(session,day,entry_id)` enforces one daily entry.
+`sermon_usage(session,sermon_id,cycle)` records the eligible shuffle bag.
+Manual and scheduled requests share the same transaction, protected by SQLite
+`BEGIN IMMEDIATE`; restarts and concurrent requests do not duplicate entries.
+The upgrade imports legacy sermon day markers, preserves journal rows and
+retires old diagram timers. Forget clears only its session's calendar and bag.
+
+See [cogitator setup and checks](cogitator.md) for configuration, the explicitly
+fictional M42 display-date convention and before/after captures.
