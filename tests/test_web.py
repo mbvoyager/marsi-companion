@@ -1,5 +1,6 @@
 """Serve the local browser shell through the normal Marsi API process."""
 from pathlib import Path
+from html import unescape
 import tempfile
 import threading
 import unittest
@@ -39,6 +40,9 @@ class BrowserRoutes(unittest.TestCase):
                     self.assertIn(b'id="climate"', body)
                     self.assertIn(b'<html lang="en">', body)
                     self.assertIn(b'>7 days</button>', body)
+                    decoded = unescape(body.decode("utf-8"))
+                    self.assertIn("°C", decoded)
+                    self.assertNotIn("Â°C", decoded)
 
     def test_journal_remains_authenticated_and_files_outside_allowlist_are_inaccessible(self):
         with self.assertRaises(ClientError) as rejected:
