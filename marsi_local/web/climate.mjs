@@ -386,6 +386,8 @@ export class ClimateView {
     if (canvas.width !== pixelWidth) canvas.width = pixelWidth;
     if (canvas.height !== pixelHeight) canvas.height = pixelHeight;
     const ctx = canvas.getContext("2d");
+    const tokens = globalThis.getComputedStyle?.(canvas);
+    const ink = (name, fallback) => tokens?.getPropertyValue("--"+name).trim() || fallback;
     ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
     ctx.clearRect(0, 0, width, height);
     ctx.font = "12px monospace";
@@ -402,7 +404,7 @@ export class ClimateView {
     }
     const readout = this.readouts[metric];
     if (!Number.isFinite(min) || plotWidth <= 0) {
-      ctx.fillStyle = "#d8cbb0";
+      ctx.fillStyle = ink("bone","#e5d9bd");
       ctx.textAlign = "center";
       ctx.fillText(history ? "No samples in this period" : "Loading climate history ...", width / 2, height / 2);
       readout.textContent = "";
@@ -413,8 +415,8 @@ export class ClimateView {
     const start = history.from_ms, end = history.to_ms;
     const x = at => left + (at - start) / Math.max(1, end - start) * plotWidth;
     const y = value => bottom - (value - low) / (high - low) * plotHeight;
-    ctx.strokeStyle = "#4b332f";
-    ctx.fillStyle = "#bca273";
+    ctx.strokeStyle = ink("dim","#58422e");
+    ctx.fillStyle = ink("brass","#bca16d");
     ctx.lineWidth = 1;
     ctx.setLineDash([]);
     for (const fraction of [0, .5, 1]) {
@@ -462,7 +464,7 @@ export class ClimateView {
       readout.textContent = "";
       return;
     }
-    ctx.strokeStyle = "#d8cbb0";
+    ctx.strokeStyle = ink("bone","#e5d9bd");
     ctx.lineWidth = 1;
     ctx.setLineDash([3, 3]);
     ctx.beginPath();

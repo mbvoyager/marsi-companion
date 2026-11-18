@@ -66,6 +66,17 @@ class ClimateTests(unittest.TestCase):
             ])
         self.assertEqual(self.client.subscribe.call_count, 2)
 
+    def test_sensor_identity_matches_history_and_survives_hiding_a_peer(self):
+        current = {s["id"]: s["style"] for s in self.server.climate.current()["sensors"]}
+        history = {s["id"]: s["style"] for s in self.server.climate.archive.history("24h")["sensors"]}
+        self.assertEqual(current, history)
+        self.assertNotEqual(current["test-forge"]["shape"], current["sim-exterior"]["shape"])
+        self.assertEqual(current["sim-exterior"]["color"], "#9fbf97")
+        with self.app.memory.connect() as db:
+            db.execute("UPDATE climate_sensors SET hidden=1 WHERE id='test-forge'")
+        remaining = self.server.climate.current()["sensors"]
+        self.assertEqual(remaining[0]["style"], current["sim-exterior"])
+
     def test_split_sensor_reports_keep_their_values_and_millisecond_timestamps(self):
         temperature = b'{"last_seen":"2026-01-01T00:00:00.051Z","temperature":22.5,"linkquality":190}'
         humidity = b'{"last_seen":"2026-01-01T00:00:00.058Z","humidity":44.8,"linkquality":191}'
