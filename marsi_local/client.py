@@ -120,6 +120,10 @@ class Client:
     def climate_now(self):
         return self.request("/v1/climate/now", method="GET")
 
+    def interlude(self, kind=None, duration=None):
+        query = {key: value for key, value in (("type", kind), ("duration", duration)) if value is not None}
+        return self.request("/v1/interlude?" + urlencode(query), method="GET")
+
     def climate_history(self, period):
         return self.request("/v1/climate/history?" + urlencode({"range": period}), method="GET")
 

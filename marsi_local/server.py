@@ -22,6 +22,8 @@ from .climate_admin import ClimateAdmin
 from .core import Companion, ServiceError, clean_text, ritual, session_name
 from .speech import MAX_AUDIO_BYTES, Speech, VOICE_CHECK_TEXT
 from .transmission import REPLY_STREAM_TYPE
+from .interludes import build_interlude
+from .theme import css as theme_css, imperial_date
 
 LOG = logging.getLogger("marsi.local")
 CLIMATE_HEARTBEAT_SECONDS = 15
@@ -34,6 +36,8 @@ WEB_ASSETS = {
     "/web/climate-admin.mjs": ("climate-admin.mjs", "text/javascript; charset=utf-8"),
     "/web/vox.mjs": ("vox.mjs", "text/javascript; charset=utf-8"),
     "/web/recorder.js": ("recorder.js", "text/javascript; charset=utf-8"),
+    "/web/theme.css": ("cogitator.json", "text/css; charset=utf-8"),
+    "/web/theme.json": ("cogitator.json", "application/json; charset=utf-8"),
 }
 
 
@@ -150,7 +154,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def web_asset(self, path):
         filename, mime = WEB_ASSETS[path]
-        body = (WEB_DIRECTORY / filename).read_bytes()
+        body = theme_css().encode("utf-8") if path == "/web/theme.css" else (WEB_DIRECTORY / filename).read_bytes()
         self.send_response(200)
         self.send_header("Content-Type", mime)
         self.send_header("Content-Length", str(len(body)))
@@ -263,6 +267,17 @@ class Handler(BaseHTTPRequestHandler):
             if method == "GET" and path in WEB_ASSETS:
                 return self.web_asset(path)
             self.authenticated()
+            if method == "GET" and path in ("/v1/interlude", "/v1/status"):
+                climate = self.server.climate.current() if self.server.climate is not None else {}
+                if path == "/v1/status":
+                    return self.respond(200, {"imperial_date": imperial_date(), "services": climate.get("services", {})})
+                query = parse_qs(urlsplit(self.path).query, keep_blank_values=True)
+                kind = query.get("type", [None])[0]
+                duration = int(query["duration"][0]) if "duration" in query else None
+                result = build_interlude(kind, readings=app.telemetry.pair(), climate=climate,
+                                         lore=app.lore, duration=duration)
+                LOG.info("Interlude: %s (%ss)", result["type"], result["duration"])
+                return self.respond(200, result)
             if path.startswith("/v1/climate/admin/"):
                 return self.climate_management(method, path.removeprefix("/v1/climate/admin/"))
             if method == "GET" and path in ("/v1/climate/now", "/v1/climate/history", "/v1/climate/events"):
