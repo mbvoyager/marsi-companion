@@ -566,4 +566,6 @@ class Companion:
             raise ValueError("Only the daily sermon is an authored inscription")
         readings = self.telemetry.pair()
         climate = self.tools.climate.current() if self.tools.climate is not None else None
-        return daily_sermon(self.memory, session, readings, climate)
+        result = daily_sermon(self.memory, session, readings, climate)
+        result["entry_id"] = result["entries"][0]["id"]
+        return result

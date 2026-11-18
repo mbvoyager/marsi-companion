@@ -153,6 +153,7 @@ class TerminalAPITests(unittest.TestCase):
         self.assertEqual([entry["kind"] for entry in journal], ["art", "sermon"])
         self.assertFalse(any(entry["scheduled"] for entry in journal))
         self.assertEqual(result["entries"][0], journal[-1])
+        self.assertEqual(result["entry_id"], journal[-1]["id"])
         self.assertEqual(self.app.memory.context("pi"), [])
         spoken = self.client.speak_entry(journal[-1]["id"])
         self.assertEqual(spoken["entry_id"], journal[-1]["id"])

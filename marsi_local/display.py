@@ -662,6 +662,9 @@ class Display:
         entry = self.pending_spoken
         if not entry or self.busy or not self.link_online or getattr(self, "interlude", None) is not None:
             return
+        if entry["id"] <= getattr(self, "last_spoken", 0):
+            self.pending_spoken = None
+            return
         age = (datetime.now().astimezone() - datetime.fromisoformat(entry["at"])).total_seconds()
         if age > 600 or not self.speak.get() or not self.rituals.get() or not self.observance_speech:
             self.pending_spoken = None

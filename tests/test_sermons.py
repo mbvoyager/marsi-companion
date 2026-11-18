@@ -8,9 +8,18 @@ from unittest.mock import patch
 from marsi_local.core import Memory
 from marsi_local.observances import Observances
 from marsi_local.sermons import choose, context, daily_sermon, pool, required
+from marsi_local.display import Display
 
 
 class SermonTests(unittest.TestCase):
+    def test_manual_speech_marker_prevents_a_second_automatic_playback(self):
+        display = Display.__new__(Display)
+        display.pending_spoken = {"id": 7}
+        display.last_spoken = 7
+        display.busy = False
+        display.link_online = True
+        display.scheduled_voice(100)
+        self.assertIsNone(display.pending_spoken)
     def setUp(self):
         folder = tempfile.TemporaryDirectory()
         self.addCleanup(folder.cleanup)
