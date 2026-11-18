@@ -23,6 +23,12 @@ class ThemeTests(unittest.TestCase):
         self.assertEqual(sensor_style({"color": "#123456"}, 1)["color"], "#123456")
         self.assertEqual(sensor_style({"color": "invalid"}, 1), styles[1])
 
+    def test_more_than_four_sensors_do_not_repeat_the_same_complete_identity(self):
+        styles = [sensor_style({},index) for index in range(64)]
+        identities = {(s["color"],s["shape"],tuple(s["dash"])) for s in styles}
+        self.assertEqual(len(identities),64)
+        self.assertNotEqual(styles[0]["dash"],styles[4]["dash"])
+
     def test_imperial_display_uses_real_year_boundaries_and_leap_year(self):
         self.assertEqual(imperial_date(datetime(2026, 1, 1, tzinfo=timezone.utc)), "0.000026.M42")
         self.assertEqual(imperial_date(datetime(2024, 7, 2, tzinfo=timezone.utc)), "0.500024.M42")

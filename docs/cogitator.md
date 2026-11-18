@@ -164,6 +164,8 @@ spacing, frame sizes and default sensor styles. Python loads it directly; the
 server derives `/web/theme.css` from it. Climate responses carry the same
 colour/shape/dash identity to both clients. Ordinary hiding/renaming preserves
 registry rows and therefore sensor identities.
+When more than four sensors are added, the same palette combines with different
+line patterns and shapes rather than immediately repeating an identical style.
 
 The decorative Imperial date is a documented display convention:
 `0.FFFYYY.M42`, where `FFF` is the UTC fraction of the real calendar year

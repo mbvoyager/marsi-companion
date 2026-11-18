@@ -29,7 +29,13 @@ def css():
 
 
 def sensor_style(sensor, index):
-    style = dict(definition()["sensors"][index % len(definition()["sensors"])])
+    patterns = definition()["sensors"]
+    count = len(patterns)
+    style = dict(patterns[index % count])
+    # Continue with new combinations as the registry grows: four colours,
+    # four line patterns and four shapes give 64 distinct default identities.
+    style["dash"] = patterns[(index+index//count) % count]["dash"]
+    style["shape"] = patterns[(index+index//(count*count)) % count]["shape"]
     color = sensor.get("color")
     if isinstance(color, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", color):
         style["color"] = color
